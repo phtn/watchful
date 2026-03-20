@@ -11,12 +11,19 @@
       "matches": [
         "*://bet88.ph/*",
         "*://*.bet88.ph/*",
-        "*://*.ap.blink.run/api/*",
+        "*://*.ap.blink.run/*",
         "*://stake.com/*",
-        "*://*.stake.com/*"
+        "*://*.stake.com/*",
+        "*://*.evo-games.com/*",
+        "*://*.evolution.com/*",
+        "*://*.evolutiongaming.com/*",
+        "*://*.ezugi.com/*"
       ],
       "js": ["dist/content.js"],
-      "run_at": "document_start"
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
     }
   ],
 

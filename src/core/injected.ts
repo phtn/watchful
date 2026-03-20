@@ -1,217 +1,269 @@
-(function () {
-  "use strict";
+;(function () {
+  'use strict'
 
-  const originalFetch = window.fetch;
-  const originalXHROpen = XMLHttpRequest.prototype.open;
-  const originalXHRSend = XMLHttpRequest.prototype.send;
+  const originalFetch = window.fetch
+  const originalWebSocket = window.WebSocket
+  const originalXHROpen = XMLHttpRequest.prototype.open
+  const originalXHRSend = XMLHttpRequest.prototype.send
 
   const gameKeywords = [
-    "bet",
-    "spin",
-    "game",
-    "play",
-    "result",
-    "outcome",
-    "win",
-    "lose",
-    "jackpot",
-    "bonus",
-    "round",
-    "turn",
-    "deal",
-    "draw",
-    "roll",
-    "limbo",
-    "dice",
-    "keno",
-    "stake",
-  ];
+    'bet',
+    'spin',
+    'game',
+    'play',
+    'result',
+    'outcome',
+    'win',
+    'lose',
+    'jackpot',
+    'bonus',
+    'round',
+    'turn',
+    'deal',
+    'draw',
+    'roll',
+    'limbo',
+    'dice',
+    'keno',
+    'roulette',
+    'stake',
+    'wheel',
+    'winspots'
+  ]
 
   function hasGameKeyword(value: string): boolean {
-    const lowerValue = value.toLowerCase();
-    return gameKeywords.some((keyword) => lowerValue.includes(keyword));
+    const lowerValue = value.toLowerCase()
+    return gameKeywords.some((keyword) => lowerValue.includes(keyword))
   }
 
   function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
   }
 
   function looksLikeBet88Result(value: unknown): boolean {
-    return (
-      isRecord(value) &&
-      typeof value.roundId === "number" &&
-      typeof value.win === "boolean"
-    );
+    return isRecord(value) && typeof value.roundId === 'number' && typeof value.win === 'boolean'
   }
 
   function looksLikeStakeBetPayload(value: unknown): boolean {
     return (
       isRecord(value) &&
-      typeof value.id === "string" &&
-      typeof value.game === "string" &&
+      typeof value.id === 'string' &&
+      typeof value.game === 'string' &&
       isRecord(value.user) &&
       isRecord(value.state)
-    );
+    )
+  }
+
+  function looksLikeEvoRouletteMessage(value: unknown): boolean {
+    return (
+      isRecord(value) &&
+      value.type === 'roulette.winSpots' &&
+      typeof value.id === 'string' &&
+      isRecord(value.args) &&
+      typeof value.args.gameId === 'string' &&
+      typeof value.args.code === 'string' &&
+      typeof value.args.description === 'string' &&
+      isRecord(value.args.winSpots) &&
+      typeof value.args.timestamp === 'string' &&
+      Array.isArray(value.args.result)
+    )
   }
 
   function responseLooksGameRelated(value: unknown, depth = 0): boolean {
     if (depth > 3 || value == null) {
-      return false;
+      return false
     }
 
-    if (typeof value === "string") {
-      return hasGameKeyword(value);
+    if (typeof value === 'string') {
+      return hasGameKeyword(value)
     }
 
-    if (looksLikeBet88Result(value) || looksLikeStakeBetPayload(value)) {
-      return true;
+    if (looksLikeBet88Result(value) || looksLikeStakeBetPayload(value) || looksLikeEvoRouletteMessage(value)) {
+      return true
     }
 
     if (Array.isArray(value)) {
-      return value.some((entry) => responseLooksGameRelated(entry, depth + 1));
+      return value.some((entry) => responseLooksGameRelated(entry, depth + 1))
     }
 
     if (isRecord(value)) {
       return Object.entries(value).some(([key, entry]) => {
         if (hasGameKeyword(key)) {
-          return true;
+          return true
         }
 
-        return responseLooksGameRelated(entry, depth + 1);
-      });
+        return responseLooksGameRelated(entry, depth + 1)
+      })
     }
 
-    return false;
+    return false
   }
 
   function isGameRelatedURL(url: string): boolean {
-    return hasGameKeyword(url);
+    return hasGameKeyword(url)
   }
 
   function parseJSON(text: string): unknown {
     try {
-      return JSON.parse(text);
+      return JSON.parse(text)
     } catch {
-      return text;
+      const firstObjectIndex = text.indexOf('{')
+      const firstArrayIndex = text.indexOf('[')
+      const candidateIndexes = [firstObjectIndex, firstArrayIndex].filter((index) => index >= 0)
+
+      for (const index of candidateIndexes.sort((left, right) => left - right)) {
+        const slice = text.slice(index)
+
+        try {
+          return JSON.parse(slice)
+        } catch {
+          continue
+        }
+      }
+
+      return text
     }
   }
 
   function captureRequestBody(body?: BodyInit | Document | null): {
-    parsed: unknown;
-    text: string | null;
+    parsed: unknown
+    text: string | null
   } {
     if (!body) {
-      return { parsed: null, text: null };
+      return { parsed: null, text: null }
     }
 
-    if (typeof body === "string") {
+    if (typeof body === 'string') {
       return {
         parsed: parseJSON(body),
-        text: body,
-      };
+        text: body
+      }
     }
 
     if (body instanceof URLSearchParams) {
-      const text = body.toString();
+      const text = body.toString()
       return {
         parsed: text,
-        text,
-      };
+        text
+      }
     }
 
     if (body instanceof FormData) {
       const parsed = Object.fromEntries(
-        Array.from(body.entries()).map(([key, value]) => [
-          key,
-          typeof value === "string" ? value : "[binary]",
-        ]),
-      );
+        Array.from(body.entries()).map(([key, value]) => [key, typeof value === 'string' ? value : '[binary]'])
+      )
 
       return {
         parsed,
-        text: JSON.stringify(parsed),
-      };
+        text: JSON.stringify(parsed)
+      }
     }
 
     return {
       parsed: body,
-      text: null,
-    };
+      text: null
+    }
   }
 
-  function requestLooksGameRelated(
-    url: string,
-    requestBody: unknown,
-    requestBodyText: string | null,
-  ): boolean {
+  async function captureWebSocketData(data: unknown): Promise<{
+    parsed: unknown
+    text: string | null
+  }> {
+    if (typeof data === 'string') {
+      return {
+        parsed: parseJSON(data),
+        text: data
+      }
+    }
+
+    if (data instanceof Blob) {
+      const text = await data.text()
+
+      return {
+        parsed: parseJSON(text),
+        text
+      }
+    }
+
+    if (data instanceof ArrayBuffer) {
+      const text = new TextDecoder().decode(data)
+
+      return {
+        parsed: parseJSON(text),
+        text
+      }
+    }
+
+    if (ArrayBuffer.isView(data)) {
+      const text = new TextDecoder().decode(data)
+
+      return {
+        parsed: parseJSON(text),
+        text
+      }
+    }
+
+    return {
+      parsed: data,
+      text: null
+    }
+  }
+
+  function requestLooksGameRelated(url: string, requestBody: unknown, requestBodyText: string | null): boolean {
     if (isGameRelatedURL(url)) {
-      return true;
+      return true
     }
 
     if (requestBodyText && hasGameKeyword(requestBodyText)) {
-      return true;
+      return true
     }
 
     if (requestBody && responseLooksGameRelated(requestBody)) {
-      return true;
+      return true
     }
 
-    return false;
+    return false
   }
 
   function sendToContentScript(data: unknown): void {
     window.postMessage(
       {
-        type: "CASINO_RESPONSE",
-        data,
+        type: 'CASINO_RESPONSE',
+        data
       },
-      "*",
-    );
+      '*'
+    )
   }
 
   function getFetchMethod(input: RequestInfo | URL, init?: RequestInit): string {
     if (init?.method) {
-      return init.method;
+      return init.method
     }
 
-    if (typeof input === "object" && "method" in input && input.method) {
-      return input.method;
+    if (typeof input === 'object' && 'method' in input && input.method) {
+      return input.method
     }
 
-    return "GET";
+    return 'GET'
   }
 
-  window.fetch = async function (
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url;
-    const { parsed: requestBody, text: requestBodyText } = captureRequestBody(
-      init?.body,
-    );
-    const hintedGameRequest = requestLooksGameRelated(
-      url,
-      requestBody,
-      requestBodyText,
-    );
+  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const { parsed: requestBody, text: requestBodyText } = captureRequestBody(init?.body)
+    const hintedGameRequest = requestLooksGameRelated(url, requestBody, requestBodyText)
 
     return originalFetch.call(this, input, init).then(async (response: Response) => {
       try {
-        const clonedResponse = response.clone();
-        const contentType = response.headers.get("content-type") || "";
+        const clonedResponse = response.clone()
+        const contentType = response.headers.get('content-type') || ''
 
-        if (!contentType.includes("application/json")) {
-          return response;
+        if (!contentType.includes('application/json')) {
+          return response
         }
 
-        const responseData = await clonedResponse.json();
+        const responseData = await clonedResponse.json()
         if (!hintedGameRequest && !responseLooksGameRelated(responseData)) {
-          return response;
+          return response
         }
 
         sendToContentScript({
@@ -220,55 +272,47 @@
           status: response.status,
           data: responseData,
           requestBody,
-          timestamp: Date.now(),
-        });
+          timestamp: Date.now()
+        })
       } catch (error) {
-        console.error("Error intercepting fetch response:", error);
+        console.error('Error intercepting fetch response:', error)
       }
 
-      return response;
-    });
-  };
+      return response
+    })
+  }
 
   XMLHttpRequest.prototype.open = function (
     method: string,
     url: string | URL,
     async?: boolean,
     user?: string | null,
-    password?: string | null,
+    password?: string | null
   ): void {
-    (this as XMLHttpRequest & { _url?: string })._url = url.toString();
-    (this as XMLHttpRequest & { _method?: string })._method = method;
+    ;(this as XMLHttpRequest & { _url?: string })._url = url.toString()
+    ;(this as XMLHttpRequest & { _method?: string })._method = method
 
-    return originalXHROpen.call(this, method, url, async ?? true, user, password);
-  };
+    return originalXHROpen.call(this, method, url, async ?? true, user, password)
+  }
 
-  XMLHttpRequest.prototype.send = function (
-    body?: Document | XMLHttpRequestBodyInit | null,
-  ): void {
+  XMLHttpRequest.prototype.send = function (body?: Document | XMLHttpRequestBodyInit | null): void {
     const xhr = this as XMLHttpRequest & {
-      _url?: string;
-      _method?: string;
-    };
-    const url = xhr._url || "";
-    const method = xhr._method || "GET";
-    const { parsed: requestBody, text: requestBodyText } = captureRequestBody(
-      body,
-    );
-    const hintedGameRequest = requestLooksGameRelated(
-      url,
-      requestBody,
-      requestBodyText,
-    );
-    const originalOnReadyStateChange = xhr.onreadystatechange;
+      _url?: string
+      _method?: string
+    }
+    const url = xhr._url || ''
+    const method = xhr._method || 'GET'
+    const { parsed: requestBody, text: requestBodyText } = captureRequestBody(body)
+    const hintedGameRequest = requestLooksGameRelated(url, requestBody, requestBodyText)
+    const originalOnReadyStateChange = xhr.onreadystatechange
 
     xhr.onreadystatechange = function (this: XMLHttpRequest, ev: Event): unknown {
       if (this.readyState === 4) {
         try {
-          const contentType = this.getResponseHeader("content-type") || "";
+          const contentType = this.getResponseHeader('content-type') || ''
 
-          if (contentType.includes("application/json") && this.responseText) {
-            const responseData = JSON.parse(this.responseText);
+          if (contentType.includes('application/json') && this.responseText) {
+            const responseData = JSON.parse(this.responseText)
 
             if (hintedGameRequest || responseLooksGameRelated(responseData)) {
               sendToContentScript({
@@ -277,24 +321,55 @@
                 status: this.status,
                 data: responseData,
                 requestBody,
-                timestamp: Date.now(),
-              });
+                timestamp: Date.now()
+              })
             }
           }
         } catch (error) {
-          console.error("Error intercepting XHR response:", error);
+          console.error('Error intercepting XHR response:', error)
         }
       }
 
       if (originalOnReadyStateChange) {
-        return originalOnReadyStateChange.call(this, ev);
+        return originalOnReadyStateChange.call(this, ev)
       }
 
-      return undefined;
-    };
+      return undefined
+    }
 
-    return originalXHRSend.call(this, body);
-  };
+    return originalXHRSend.call(this, body)
+  }
 
-  console.log("Casino game interceptor injected successfully");
-})();
+  if (typeof originalWebSocket === 'function') {
+    window.WebSocket = new Proxy(originalWebSocket, {
+      construct(target, args) {
+        const socket = Reflect.construct(target, args) as WebSocket
+
+        socket.addEventListener('message', async (event) => {
+          try {
+            const { parsed, text } = await captureWebSocketData(event.data)
+
+            if (parsed == null || (!responseLooksGameRelated(parsed) && !(text && hasGameKeyword(text)))) {
+              return
+            }
+
+            sendToContentScript({
+              url: socket.url,
+              method: 'WS',
+              status: 101,
+              data: parsed,
+              timestamp: Date.now(),
+              transport: 'websocket'
+            })
+          } catch (error) {
+            console.error('Error intercepting WebSocket message:', error)
+          }
+        })
+
+        return socket
+      }
+    }) as typeof WebSocket
+  }
+
+  console.log('Casino game interceptor injected successfully')
+})()

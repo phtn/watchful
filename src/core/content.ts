@@ -8,6 +8,12 @@ import {
   type SupportedGameKey
 } from '../types'
 import type { Bet88, Bet88Dice, Bet88Keno, Bet88Limbo, Bet88Mines } from '../types/bet88'
+import {
+  normalizeRouletteStoredData,
+  summarizeRouletteResults,
+  type EvoMessage,
+  type RouletteSpinResult
+} from '../types/roulette'
 import type {
   Stake,
   StakeDice,
@@ -26,6 +32,7 @@ interface InterceptedNetworkPayload {
   data: unknown
   requestBody?: unknown
   timestamp: number
+  transport?: 'http' | 'websocket'
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -45,11 +52,18 @@ window.addEventListener('message', async (event: MessageEvent) => {
   }
 
   const responseData = event.data.data as InterceptedNetworkPayload
-  await processGameResult(responseData)
+  await processCapturedPayload(responseData)
 })
 
-async function processGameResult(responseData: InterceptedNetworkPayload): Promise<void> {
+async function processCapturedPayload(responseData: InterceptedNetworkPayload): Promise<void> {
   try {
+    const rouletteResult = parseRouletteResult(responseData)
+    if (rouletteResult) {
+      await saveRouletteResult(rouletteResult)
+      console.log('Roulette spin saved:', rouletteResult)
+      return
+    }
+
     const result = parseGameResult(responseData)
 
     if (!result) {
@@ -186,6 +200,27 @@ function isBet88Base(value: unknown): value is Bet88<unknown> {
   )
 }
 
+function isRouletteResultEntry(value: unknown): value is { number: string } {
+  return isRecord(value) && typeof value.number === 'string'
+}
+
+function isEvoMessage(value: unknown): value is EvoMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'roulette.winSpots' &&
+    typeof value.id === 'string' &&
+    isRecord(value.args) &&
+    typeof value.args.gameId === 'string' &&
+    typeof value.args.code === 'string' &&
+    typeof value.args.description === 'string' &&
+    isRecord(value.args.winSpots) &&
+    typeof value.args.timestamp === 'string' &&
+    Array.isArray(value.args.result) &&
+    value.args.result.every(isRouletteResultEntry) &&
+    typeof value.time === 'number'
+  )
+}
+
 function getNumberArray(value: unknown): number[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
@@ -276,7 +311,22 @@ function findMatchingRecord<T>(value: unknown, matcher: (candidate: unknown) => 
     return value
   }
 
-  if (!isRecord(value) || depth >= 4) {
+  if (depth >= 4 || value == null) {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    for (const nestedValue of value) {
+      const match = findMatchingRecord(nestedValue, matcher, depth + 1)
+      if (match) {
+        return match
+      }
+    }
+
+    return null
+  }
+
+  if (!isRecord(value)) {
     return null
   }
 
@@ -308,6 +358,19 @@ function extractBet88Payload(payload: InterceptedNetworkPayload): Bet88<unknown>
 
   for (const candidate of candidates) {
     const match = findMatchingRecord(candidate, isBet88Base)
+    if (match) {
+      return match
+    }
+  }
+
+  return null
+}
+
+function extractRoulettePayload(payload: InterceptedNetworkPayload): EvoMessage | null {
+  const candidates = [payload.data]
+
+  for (const candidate of candidates) {
+    const match = findMatchingRecord(candidate, isEvoMessage)
     if (match) {
       return match
     }
@@ -616,6 +679,49 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
   }
 }
 
+function parseRouletteWinningNumber(providerData: EvoMessage): number | null {
+  const winningNumber = toNumber(providerData.args.result[0]?.number ?? providerData.args.code)
+
+  if (winningNumber === undefined || !Number.isInteger(winningNumber) || winningNumber < 0 || winningNumber > 36) {
+    return null
+  }
+
+  return winningNumber
+}
+
+function parseRouletteResult(payload: InterceptedNetworkPayload): RouletteSpinResult | null {
+  const providerData = extractRoulettePayload(payload)
+  if (!providerData) {
+    return null
+  }
+
+  const winningNumber = parseRouletteWinningNumber(providerData)
+  if (winningNumber === null) {
+    return null
+  }
+
+  const resultNumbers = providerData.args.result
+    .map((entry) => toNumber(entry.number))
+    .filter((entry): entry is number => entry !== undefined && Number.isInteger(entry) && entry >= 0 && entry <= 36)
+
+  return {
+    id: providerData.id,
+    provider: 'stake',
+    source: 'evolution',
+    game: 'roulette',
+    eventType: 'winSpots',
+    gameId: providerData.args.gameId,
+    code: providerData.args.code,
+    description: providerData.args.description,
+    winSpots: providerData.args.winSpots,
+    resultNumbers,
+    winningNumber,
+    timestamp: parseTimestamp(providerData.args.timestamp) ?? providerData.time ?? payload.timestamp ?? Date.now(),
+    updatedAt: providerData.args.timestamp,
+    url: window.location.href
+  }
+}
+
 function parseGameResult(payload: InterceptedNetworkPayload): GameResult | null {
   const pageSite = getSupportedSite(window.location.href)?.key
 
@@ -682,6 +788,10 @@ function findExistingResultIndex(results: GameResult[], candidate: GameResult): 
   })
 }
 
+function findExistingRouletteResultIndex(results: RouletteSpinResult[], candidate: RouletteSpinResult): number {
+  return results.findIndex((entry) => entry.id === candidate.id)
+}
+
 async function saveGameResult(result: GameResult): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.get(['casinoResults', 'virtualBankroll'], async (data) => {
@@ -723,6 +833,30 @@ async function saveGameResult(result: GameResult): Promise<void> {
       chrome.storage.local.set({ casinoResults: nextStored }, async () => {
         const port = await getDevServerPort()
         await sendToDevServer(nextResult, port)
+        resolve()
+      })
+    })
+  })
+}
+
+async function saveRouletteResult(result: RouletteSpinResult): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['rouletteResults'], (data) => {
+      const stored = normalizeRouletteStoredData(data.rouletteResults)
+      let results = [...stored.results]
+      const existingResultIndex = findExistingRouletteResultIndex(results, result)
+
+      if (existingResultIndex >= 0) {
+        results[existingResultIndex] = result
+      } else {
+        results.push(result)
+      }
+
+      if (results.length > 1000) {
+        results = results.slice(-1000)
+      }
+
+      chrome.storage.local.set({ rouletteResults: summarizeRouletteResults(results) }, () => {
         resolve()
       })
     })
