@@ -14,7 +14,6 @@ import {
 } from '../types'
 import { GameEntry } from './components/GameEntry'
 import { MainHeader } from './components/Header'
-import { KenoRecommendation } from './components/KenoRecommendation'
 import { ProviderMetric } from './components/ProviderMetric'
 import { Pulse } from './components/Pulse'
 import { VirtualBankrollCard } from './components/VirtualBankrollCard'
@@ -234,10 +233,9 @@ const App = () => {
 
   return (
     <div className={` min-h-screen text-slate-950 antialiased`}>
-      <div className='mx-auto flex max-w-[440px] flex-col gap-4'>
+      <div className='mx-auto flex max-w-[440px] flex-col'>
         <MainHeader status={status} stats={stats} latestGame={latestGame} />
-
-        <div className='px-4'>
+        <div className='pt-2 px-6'>
           <Pulse
             requestUrlStatus={requestUrlStatus}
             clearData={clearData}
@@ -256,7 +254,7 @@ const App = () => {
           onReplenish={replenishVirtualBankroll}
           onReset={resetVirtualBankroll}
         />
-        <KenoRecommendation results={stats.results} />
+        {/*<KenoRecommendation results={stats.results} />*/}
         <section className='rounded-[16.01px] border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
           <div className='flex items-center justify-between gap-3'>
             <div>

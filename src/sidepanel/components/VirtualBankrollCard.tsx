@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { VirtualBankrollSnapshot } from '../../lib/virtual-bankroll'
 import type { VirtualBankrollState } from '../../types'
 import { formatAmount, formatDateTime, formatSignedAmount, getNetTone } from '../lib/formatters'
+import { CompactMetric, Metric } from './HeroMetric'
 
 interface VirtualBankrollCardProps {
   bankroll: VirtualBankrollState
@@ -69,26 +70,34 @@ export function VirtualBankrollCard({
     onUpdateBaseBetAmount(parsed)
   }
 
-  return (
-    <section className='rounded-[16.01px] border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
-      <div className='flex items-center justify-between gap-3'>
-        <div>
-          <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Virtual Bankroll</p>
-          <h2 className='font-display mt-2 text-[1.55rem] leading-none text-slate-900'>Paper Balance</h2>
-        </div>
-        <div
-          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
-            bankroll.enabled
-              ? 'border-emerald-200/80 bg-emerald-50 text-emerald-700'
-              : 'border-slate-200/80 bg-slate-50 text-slate-600'
-          }`}>
-          {bankroll.enabled ? 'Enabled' : 'Disabled'}
-        </div>
-      </div>
+  const fields = useMemo(
+    () =>
+      [
+        {
+          id: 'vb',
+          label: 'Virtual',
+          value: formatAmount(bankroll.seedBalance)
+        },
+        {
+          id: 'pnl',
+          label: 'P / L',
+          value: formatSignedAmount(snapshot.profitLoss)
+        },
+        {
+          id: 'bet',
+          label: 'Bet',
+          value: formatAmount(snapshot.baseBetAmount)
+        }
+      ] as (Metric & { id: string })[],
+    [bankroll]
+  )
 
+  return (
+    <section className='rounded-[6.01px] px-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+      <CompactMetric data={fields} />
       {bankroll.enabled ? (
         <>
-          <div className='mt-4 grid grid-cols-2 gap-3'>
+          <div className='hidden mt-4 _grid grid-cols-2 gap-3'>
             <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Current Balance</p>
               <p className='mt-2 text-xl font-semibold text-slate-900'>{formatAmount(snapshot.currentBalance)}</p>
@@ -103,7 +112,7 @@ export function VirtualBankrollCard({
             </div>
           </div>
 
-          <div className='mt-3 grid grid-cols-2 gap-3'>
+          <div className='hidden _grid grid-cols-2 gap-3 mt-3'>
             <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Replenished</p>
               <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.totalReplenished)}</p>
@@ -114,14 +123,14 @@ export function VirtualBankrollCard({
             </div>
           </div>
 
-          <div className='mt-3 grid grid-cols-2 gap-3'>
+          <div className='hidden _grid grid-cols-2 gap-3 mt-3'>
             <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Tracking Since</p>
               <p className='mt-2 text-sm font-semibold text-slate-900'>
                 {snapshot.trackingStartedAt ? formatDateTime(snapshot.trackingStartedAt) : 'Not started'}
               </p>
             </div>
-            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+            <div className='hidden rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Adjust Bet Amount</p>
               <div className='mt-2 flex gap-2'>
                 <input
@@ -141,7 +150,7 @@ export function VirtualBankrollCard({
             </div>
           </div>
 
-          <div className='mt-4 rounded-[20px] border border-white/70 bg-[linear-gradient(180deg,rgba(240,244,255,0.94),rgba(255,255,255,0.92))] p-4'>
+          <div className='hidden mt-4 rounded-[20px] border border-white/70 bg-[linear-gradient(180deg,rgba(240,244,255,0.94),rgba(255,255,255,0.92))] p-4'>
             <div className='flex items-center justify-between gap-3'>
               <p className='text-[0.64rem] uppercase tracking-[0.26em] text-slate-500'>Replenish Balance</p>
               <button
@@ -170,7 +179,7 @@ export function VirtualBankrollCard({
               </div>
             ) : null}
 
-            <div className='mt-3 grid grid-cols-2 gap-2'>
+            <div className='hidden _grid grid-cols-2 gap-2 mt-3'>
               <button
                 onClick={onReset}
                 className='rounded-[18px] border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100'>

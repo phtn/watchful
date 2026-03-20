@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@types/chrome": "^0.1.38",
-    "geist": "^1.7.0"
+    "class-variance-authority": "^0.7.1",
+    "geist": "^1.7.0",
+    "tailwind-merge": "^3.5.0"
   }
 }

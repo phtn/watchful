@@ -12,7 +12,7 @@ interface PulseProps {
 }
 export const Pulse = ({ requestUrlStatus, clearData, totalStaked, netProfit, latestGame, getNetTone }: PulseProps) => {
   return (
-    <section className='rounded-[12.01px] border border-neutral-300 bg-white/76 p-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+    <section className='rounded-t-[12.01px] border border-neutral-300 border-b-0 bg-white/76 p-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
       <div className='flex items-center justify-between gap-4'>
         <div className='flex h-full flex-col justify-end flex-1 space-y-1'>
           <div className='flex items-center space-x-2'>
@@ -28,13 +28,13 @@ export const Pulse = ({ requestUrlStatus, clearData, totalStaked, netProfit, lat
           <div className='grid grid-cols-2 gap-2'>
             <button
               onClick={requestUrlStatus}
-              className='rounded-md border border-sky-200/70 bg-sky-50 h-8 text-center text-sm font-semibold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100'>
-              Rescan
+              className='rounded-md border border-sky-700/70 bg-sky-50 h-8 text-center text-sm font-semibold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100'>
+              SCN
             </button>
             <button
               onClick={clearData}
-              className='rounded-md border border-rose-200/70 bg-rose-50 h-8 text-center text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100'>
-              Clear
+              className='rounded-md border border-rose-400/70 bg-rose-50 h-8 text-center text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100'>
+              CLR
             </button>
           </div>
         </div>
