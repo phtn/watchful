@@ -1,13 +1,43 @@
 import * as esbuild from 'esbuild'
 import babel from 'esbuild-plugin-babel'
 import { execSync } from 'child_process'
-import { existsSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync } from 'fs'
+import { join } from 'path'
 
 const isDev = process.argv.includes('--dev')
+const distDir = 'dist'
+
+function copyGeistFonts() {
+  const fonts = [
+    {
+      source: 'node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2',
+      target: join(distDir, 'fonts', 'Geist-Variable.woff2')
+    },
+    {
+      source: 'node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2',
+      target: join(distDir, 'fonts', 'GeistMono-Variable.woff2')
+    },
+    {
+      source: 'node_modules/geist/dist/fonts/geist-pixel/GeistPixel-Square.woff2',
+      target: join(distDir, 'fonts', 'GeistPixel-Square.woff2')
+    }
+  ]
+
+  mkdirSync(join(distDir, 'fonts'), { recursive: true })
+
+  fonts.forEach(({ source, target }) => {
+    if (!existsSync(source)) {
+      throw new Error(`Missing font asset: ${source}`)
+    }
+
+    copyFileSync(source, target)
+  })
+}
 
 // Process CSS with PostCSS - output to sidepanel.css to match HTML reference
 console.log('Processing CSS with PostCSS...')
 try {
+  copyGeistFonts()
   execSync('bunx postcss src/global.css -o dist/sidepanel.css', { stdio: 'inherit' })
 } catch (error) {
   console.error('PostCSS processing failed:', error.message)

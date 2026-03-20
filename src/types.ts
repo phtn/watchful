@@ -1,4 +1,6 @@
 import type { HTMLProps } from 'react'
+import { applyPaperBankrollToRound } from './lib/paper-bankroll'
+import { resolveFinancialOutcome } from './lib/result-outcome'
 import type { Bet88, Bet88Dice, Bet88Keno, Bet88Limbo, Bet88Mines } from './types/bet88'
 import type { Stake, StakeDice, StakeKeno, StakeLimbo, StakeMinesCashOut } from './types/stake'
 
@@ -8,11 +10,26 @@ export type SupportedSiteKey = 'bet88' | 'stake'
 export type SupportedGameKey = 'keno' | 'limbo' | 'dice' | 'mines'
 export type GameOutcome = 'win' | 'loss'
 
+export interface PanelStatus {
+  connected: boolean
+  message: string
+  site: SupportedSiteKey | null
+  url?: string
+}
+
 export interface ResultSummary {
   totalGames: number
   wins: number
   losses: number
   winRate: number
+}
+
+export interface VirtualBankrollState {
+  enabled: boolean
+  seedBalance: number
+  baseBetAmount: number
+  replenishedTotal: number
+  trackingStartedAt: number | null
 }
 
 export type ProviderPayload =
@@ -85,6 +102,8 @@ export interface GameResult {
   payoutMultiplier?: number
   winAmount?: string
   playerId?: number | string
+  paperBankrollEnabled?: boolean
+  paperBetAmount?: number
   userName?: string
   url: string
 }
@@ -114,8 +133,29 @@ export const EMPTY_STORED_DATA: StoredData = {
   providers: EMPTY_PROVIDER_SUMMARIES
 }
 
+export const EMPTY_VIRTUAL_BANKROLL: VirtualBankrollState = {
+  enabled: false,
+  seedBalance: 1000,
+  baseBetAmount: 1,
+  replenishedTotal: 0,
+  trackingStartedAt: null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
 }
 
 function isSupportedSite(value: unknown): value is SupportedSiteKey {
@@ -155,6 +195,50 @@ function summarizeGroup(results: GameResult[]): ResultSummary {
   }
 }
 
+function withPaperBankrollContext(result: GameResult, bankroll: VirtualBankrollState): GameResult {
+  if (typeof result.paperBankrollEnabled === 'boolean') {
+    return result
+  }
+
+  if (
+    bankroll.enabled !== true ||
+    bankroll.trackingStartedAt === null ||
+    result.timestamp < bankroll.trackingStartedAt ||
+    !Number.isFinite(bankroll.baseBetAmount) ||
+    bankroll.baseBetAmount <= 0
+  ) {
+    return result
+  }
+
+  return {
+    ...result,
+    paperBankrollEnabled: true,
+    paperBetAmount: bankroll.baseBetAmount
+  }
+}
+
+function normalizeStakeKenoFinancials(result: GameResult): GameResult {
+  if (
+    result.provider !== 'stake' ||
+    result.game !== 'keno' ||
+    typeof result.amount !== 'number' ||
+    !Number.isFinite(result.amount) ||
+    typeof result.payoutMultiplier !== 'number' ||
+    !Number.isFinite(result.payoutMultiplier) ||
+    result.amount <= 0 ||
+    result.payoutMultiplier <= 0
+  ) {
+    return result
+  }
+
+  const payout = result.amount * result.payoutMultiplier
+  return {
+    ...result,
+    payout,
+    profit: payout - result.amount
+  }
+}
+
 export function summarizeResults(results: GameResult[]): StoredData {
   return {
     results,
@@ -166,11 +250,45 @@ export function summarizeResults(results: GameResult[]): StoredData {
   }
 }
 
-export function normalizeStoredData(stored: unknown): StoredData {
+export function normalizeStoredData(
+  stored: unknown,
+  bankroll: VirtualBankrollState = EMPTY_VIRTUAL_BANKROLL
+): StoredData {
   if (!isRecord(stored) || !Array.isArray(stored.results)) {
     return EMPTY_STORED_DATA
   }
 
-  const results = stored.results.filter(isGameResult)
+  const results = stored.results.filter(isGameResult).map((entry) => {
+    const result = applyPaperBankrollToRound(normalizeStakeKenoFinancials(withPaperBankrollContext(entry, bankroll)))
+
+    return {
+      ...result,
+      result: resolveFinancialOutcome({
+        amount: result.amount,
+        payout: result.payout,
+        profit: result.profit,
+        existingResult: result.result
+      })
+    }
+  })
   return summarizeResults(results)
+}
+
+export function normalizeVirtualBankroll(stored: unknown): VirtualBankrollState {
+  if (!isRecord(stored)) {
+    return EMPTY_VIRTUAL_BANKROLL
+  }
+
+  const seedBalance = toFiniteNumber(stored.seedBalance)
+  const baseBetAmount = toFiniteNumber(stored.baseBetAmount)
+  const replenishedTotal = toFiniteNumber(stored.replenishedTotal)
+  const trackingStartedAt = toFiniteNumber(stored.trackingStartedAt)
+
+  return {
+    enabled: stored.enabled === true,
+    seedBalance: seedBalance ?? EMPTY_VIRTUAL_BANKROLL.seedBalance,
+    baseBetAmount: baseBetAmount ?? EMPTY_VIRTUAL_BANKROLL.baseBetAmount,
+    replenishedTotal: replenishedTotal ?? EMPTY_VIRTUAL_BANKROLL.replenishedTotal,
+    trackingStartedAt: trackingStartedAt ?? EMPTY_VIRTUAL_BANKROLL.trackingStartedAt
+  }
 }

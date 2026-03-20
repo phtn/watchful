@@ -1,11 +1,70 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('./fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('./fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Pixel Square';
+  src: url('./fonts/GeistPixel-Square.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Circle';
+  src: url('./fonts/GeistPixel-Circle.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-mono: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Line';
+  src: url('./fonts/GeistPixel-Line.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Grid';
+  src: url('./fonts/GeistPixel-Grid.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Pixel Triangle';
+  src: url('./fonts/GeistPixel-Triangle.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-mono: swap;
+}
+
 :root {
   --panel-bg: #eff4fb;
   --panel-ink: #102033;
   --panel-muted: #5a6a7d;
-  --font-display: 'Avenir Next Condensed', 'Arial Narrow', 'Franklin Gothic Medium', 'Segoe UI', sans-serif;
-  --font-body: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', 'Nimbus Sans', sans-serif;
+  --font-display: 'Geist Pixel Square', 'Geist Sans', 'Segoe UI', sans-serif;
+  --font-body: 'Geist Sans', 'Segoe UI', 'Helvetica Neue', 'Nimbus Sans', sans-serif;
+  --font-mono: 'Geist Mono', 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  --font-circ: 'Geist Pixel Circle', sans-serif;
+  --font-line: 'Geist Pixel Line', sans-serif;
+  --font-grid: 'Geist Pixel Grid', sans-serif;
+  --font-tri: 'Geist Pixel Triangle', sans-serif;
+  --color-keno: #962eff;
+  --color-meno: #071824;
 }
 
 * {
@@ -73,11 +132,29 @@ input {
 }
 
 code {
-  font-family: 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .font-display {
   font-family: var(--font-display);
+}
+.font-circ {
+  font-family: var(--font-circ);
+}
+.font-line {
+  font-family: var(--font-line);
+}
+.font-grid {
+  font-family: var(--font-grid);
+}
+.font-tri {
+  font-family: var(--font-tri);
+}
+.meno {
+  background-color: var(--color-meno);
+}
+.keno {
+  background-color: var(--color-keno);
 }
 
 ::-webkit-scrollbar {
@@ -87,15 +164,3 @@ code {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
-/*::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 9999px;
-  background: rgba(100, 116, 139, 0.32);
-  background-clip: padding-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 0.45);
-  background-clip: padding-box;
-}*/

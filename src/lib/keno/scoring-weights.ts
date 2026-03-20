@@ -1,16 +1,89 @@
-type DrawHistory = number[][]
+import type { GameResult } from '../../types'
 
-interface ScoredNumber {
+export type DrawHistory = number[][]
+
+export interface ScoredNumber {
   value: number
   score: number
   frequency: number
   recencyBonus: number
 }
 
-interface RecommendationResult {
+export interface RecommendationResult {
   recommended: number[]
   scoredNumbers: ScoredNumber[]
   expectedOverlap: number
+  sampleSize: number
+}
+
+const KENO_MIN = 1
+const KENO_MAX = 40
+const KENO_RANGE_SIZE = KENO_MAX - KENO_MIN + 1
+const KENO_DRAW_SIZE = 10
+const DEFAULT_POOL_SIZE = 10
+const DEFAULT_HISTORY_LIMIT = 120
+
+function getNumberRange(): number[] {
+  return Array.from({ length: KENO_RANGE_SIZE }, (_, index) => index + KENO_MIN)
+}
+
+function validateHistory(history: DrawHistory): void {
+  for (const draw of history) {
+    if (!Array.isArray(draw)) {
+      throw new Error('Each Keno draw must be an array of numbers.')
+    }
+
+    const uniqueValues = new Set(draw)
+    if (uniqueValues.size !== draw.length) {
+      throw new Error('Keno draws must not contain duplicate numbers.')
+    }
+
+    if (draw.some((value) => !Number.isInteger(value) || value < KENO_MIN || value > KENO_MAX)) {
+      throw new Error(`All Keno numbers must be integers in range ${KENO_MIN}-${KENO_MAX}.`)
+    }
+  }
+}
+
+function validatePoolSize(poolSize: number): void {
+  if (!Number.isInteger(poolSize) || poolSize < 1 || poolSize > KENO_RANGE_SIZE) {
+    throw new Error(`Pool size must be an integer between 1 and ${KENO_RANGE_SIZE}.`)
+  }
+}
+
+function normalizeKenoDraw(draw: unknown): number[] | null {
+  if (!Array.isArray(draw)) {
+    return null
+  }
+
+  const normalized = draw.map((value) => {
+    if (typeof value === 'number') {
+      return Number.isInteger(value) ? value : null
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value)
+      return Number.isInteger(parsed) ? parsed : null
+    }
+
+    return null
+  })
+
+  if (normalized.some((value) => value === null)) {
+    return null
+  }
+
+  const integers = normalized.filter((value): value is number => value !== null)
+
+  if (integers.some((value) => value < KENO_MIN || value > KENO_MAX)) {
+    return null
+  }
+
+  const uniqueValues = new Set(integers)
+  if (uniqueValues.size !== integers.length) {
+    return null
+  }
+
+  return integers
 }
 
 function scoreNumbers(history: DrawHistory): ScoredNumber[] {
@@ -18,10 +91,8 @@ function scoreNumbers(history: DrawHistory): ScoredNumber[] {
   const frequencyMap = new Map<number, number>()
   const recencyMap = new Map<number, number>()
 
-  // Count frequency and recency-weighted appearances
   history.forEach((draw, drawIndex) => {
-    // More recent draws get higher weight (linear decay)
-    const recencyWeight = (drawIndex + 1) / totalDraws
+    const recencyWeight = totalDraws === 0 ? 0 : (drawIndex + 1) / totalDraws
 
     draw.forEach((num) => {
       frequencyMap.set(num, (frequencyMap.get(num) ?? 0) + 1)
@@ -29,18 +100,16 @@ function scoreNumbers(history: DrawHistory): ScoredNumber[] {
     })
   })
 
-  const maxFrequency = Math.max(...frequencyMap.values(), 1)
-  const maxRecency = Math.max(...recencyMap.values(), 1)
+  const frequencyValues = [...frequencyMap.values()]
+  const recencyValues = [...recencyMap.values()]
+  const maxFrequency = frequencyValues.length > 0 ? Math.max(...frequencyValues) : 1
+  const maxRecency = recencyValues.length > 0 ? Math.max(...recencyValues) : 1
 
-  return Array.from({ length: 40 }, (_, i) => i + 1).map((num) => {
+  return getNumberRange().map((num) => {
     const frequency = frequencyMap.get(num) ?? 0
     const recencyBonus = recencyMap.get(num) ?? 0
-
-    // Normalize both scores to [0, 1] and combine
     const normalizedFreq = frequency / maxFrequency
     const normalizedRecency = recencyBonus / maxRecency
-
-    // 60% weight on frequency, 40% on recency
     const score = normalizedFreq * 0.6 + normalizedRecency * 0.4
 
     return { value: num, score, frequency, recencyBonus }
@@ -48,76 +117,113 @@ function scoreNumbers(history: DrawHistory): ScoredNumber[] {
 }
 
 function ensureRangeCoverage(candidates: ScoredNumber[], poolSize: number): number[] {
-  // Divide 1–40 into 4 ranges of 10 to avoid clustering
   const ranges = [
-    candidates.filter((n) => n.value <= 10),
-    candidates.filter((n) => n.value > 10 && n.value <= 20),
-    candidates.filter((n) => n.value > 20 && n.value <= 30),
-    candidates.filter((n) => n.value > 30)
+    candidates.filter((candidate) => candidate.value <= 10),
+    candidates.filter((candidate) => candidate.value > 10 && candidate.value <= 20),
+    candidates.filter((candidate) => candidate.value > 20 && candidate.value <= 30),
+    candidates.filter((candidate) => candidate.value > 30)
   ]
 
-  const minPerRange = Math.floor(poolSize / ranges.length) // at least 2 per range
+  const minPerRange = Math.floor(poolSize / ranges.length)
   const selected = new Set<number>()
 
-  // Guarantee minimum coverage per range
   for (const range of ranges) {
-    const sorted = [...range].sort((a, b) => b.score - a.score)
-    sorted.slice(0, minPerRange).forEach((n) => selected.add(n.value))
+    const sorted = [...range].sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score
+      }
+
+      return left.value - right.value
+    })
+
+    sorted.slice(0, minPerRange).forEach((candidate) => selected.add(candidate.value))
   }
 
-  // Fill remaining slots from top-scored unselected numbers
-  const remaining = candidates.filter((n) => !selected.has(n.value)).sort((a, b) => b.score - a.score)
+  const remaining = candidates
+    .filter((candidate) => !selected.has(candidate.value))
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score
+      }
 
-  for (const n of remaining) {
-    if (selected.size >= poolSize) break
-    selected.add(n.value)
+      return left.value - right.value
+    })
+
+  for (const candidate of remaining) {
+    if (selected.size >= poolSize) {
+      break
+    }
+
+    selected.add(candidate.value)
   }
 
-  return [...selected].sort((a, b) => a - b)
+  return [...selected].sort((left, right) => left - right)
 }
 
 function estimateExpectedOverlap(recommended: number[], history: DrawHistory): number {
-  if (history.length === 0) return 3 // baseline: 10 drawn from 40, pick 10 → E[overlap] = 2.5
-
-  const overlaps = history.map((draw) => draw.filter((n) => recommended.includes(n)).length)
-  return overlaps.reduce((sum, o) => sum + o, 0) / overlaps.length
-}
-
-export function recommendNumbers(history: DrawHistory, poolSize: number = 10): RecommendationResult {
-  if (history.some((draw) => draw.some((n) => n < 1 || n > 40))) {
-    throw new Error('All numbers must be in range 1–40.')
+  if (history.length === 0) {
+    return (recommended.length * KENO_DRAW_SIZE) / KENO_RANGE_SIZE
   }
 
-  const scoredNumbers = scoreNumbers(history)
-
-  const recommended =
-    history.length === 0
-      ? Array.from({ length: poolSize }, (_, i) => i + 1) // no history: pick 1–10
-      : ensureRangeCoverage(scoredNumbers, poolSize)
-
-  const expectedOverlap = estimateExpectedOverlap(recommended, history)
-
-  return { recommended, scoredNumbers, expectedOverlap }
+  const recommendedSet = new Set(recommended)
+  const overlaps = history.map((draw) => draw.filter((value) => recommendedSet.has(value)).length)
+  return overlaps.reduce((sum, overlap) => sum + overlap, 0) / overlaps.length
 }
 
-// --- Example usage ---
+function getStakeKenoDraw(game: GameResult): number[] | null {
+  if (game.providerData.provider !== 'stake' || game.providerData.game !== 'keno') {
+    return null
+  }
 
-const history: DrawHistory = [
-  [1, 5, 12, 17, 23, 28, 33, 36, 38, 40],
-  [2, 5, 11, 17, 22, 27, 33, 35, 37, 40],
-  [3, 7, 12, 18, 23, 29, 31, 35, 38, 39],
-  [5, 9, 14, 17, 24, 28, 32, 35, 37, 40],
-  [1, 6, 12, 19, 23, 27, 33, 36, 38, 40]
-]
+  return game.providerData.response.state.drawnNumbers
+}
 
-const result = recommendNumbers(history, 10)
+function getBet88KenoDraw(game: GameResult): number[] | null {
+  if (game.providerData.provider !== 'bet88' || game.providerData.game !== 'keno') {
+    return null
+  }
 
-console.log('Recommended numbers:', result.recommended)
-console.log('Expected overlap with a future draw (historical avg):', result.expectedOverlap.toFixed(2))
-console.log(
-  '\nTop 10 scored numbers:',
-  result.scoredNumbers
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
-    .map((n) => `${n.value} (score: ${n.score.toFixed(3)})`)
-)
+  return game.providerData.response.custom.drawNumbers
+}
+
+function getKenoDraw(game: GameResult): number[] | null {
+  return getStakeKenoDraw(game) ?? getBet88KenoDraw(game)
+}
+
+export function extractKenoDrawHistory(
+  results: GameResult[],
+  historyLimit: number = DEFAULT_HISTORY_LIMIT
+): DrawHistory {
+  const limit = Number.isInteger(historyLimit) && historyLimit > 0 ? historyLimit : DEFAULT_HISTORY_LIMIT
+
+  return results
+    .filter((game) => game.game === 'keno')
+    .slice(-limit)
+    .map((game) => getKenoDraw(game))
+    .map((draw) => normalizeKenoDraw(draw))
+    .filter((draw): draw is number[] => Array.isArray(draw) && draw.length > 0)
+}
+
+export function recommendNumbers(history: DrawHistory, poolSize: number = DEFAULT_POOL_SIZE): RecommendationResult {
+  validatePoolSize(poolSize)
+  validateHistory(history)
+
+  const scoredNumbers = scoreNumbers(history)
+  const recommended = ensureRangeCoverage(scoredNumbers, poolSize)
+  const expectedOverlap = estimateExpectedOverlap(recommended, history)
+
+  return {
+    recommended,
+    scoredNumbers,
+    expectedOverlap,
+    sampleSize: history.length
+  }
+}
+
+export function recommendKenoNumbers(
+  results: GameResult[],
+  options?: { poolSize?: number; historyLimit?: number }
+): RecommendationResult {
+  const history = extractKenoDrawHistory(results, options?.historyLimit)
+  return recommendNumbers(history, options?.poolSize)
+}

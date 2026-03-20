@@ -1,4 +1,12 @@
-import { normalizeStoredData, summarizeResults, type GameResult, type SupportedGameKey } from '../types'
+import { applyPaperBankrollToRound } from '../lib/paper-bankroll'
+import { resolveFinancialOutcome } from '../lib/result-outcome'
+import {
+  normalizeStoredData,
+  normalizeVirtualBankroll,
+  summarizeResults,
+  type GameResult,
+  type SupportedGameKey
+} from '../types'
 import type { Bet88, Bet88Dice, Bet88Keno, Bet88Limbo, Bet88Mines } from '../types/bet88'
 import type {
   Stake,
@@ -174,45 +182,89 @@ function isBet88Base(value: unknown): value is Bet88<unknown> {
     typeof value.winAmount === 'string' &&
     typeof value.profit === 'string' &&
     typeof value.playerId === 'number' &&
-    isRecord(value.custom)
+    'custom' in value
   )
 }
 
-function isBet88KenoCustom(value: unknown): value is Bet88Keno {
-  return isRecord(value) && isNumberArray(value.drawNumbers) && typeof value.numberOfMatches === 'number'
+function getNumberArray(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  const numbers = value
+    .map((entry) => toNumber(entry))
+    .filter((entry): entry is number => typeof entry === 'number' && Number.isFinite(entry))
+
+  return numbers.length === value.length ? numbers : undefined
 }
 
-function isBet88LimboCustom(value: unknown): value is Bet88Limbo {
-  return isRecord(value) && typeof value.multiplier === 'number' && typeof value.winningChance === 'number'
+function normalizeBet88KenoCustom(value: unknown): Bet88Keno | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  return {
+    drawNumbers: getNumberArray(value.drawNumbers) ?? [],
+    numberOfMatches: toNumber(value.numberOfMatches) ?? 0
+  }
 }
 
-function isBet88DiceCustom(value: unknown): value is Bet88Dice {
-  return isRecord(value) && typeof value.result === 'string' && typeof value.winningChance === 'string'
+function normalizeBet88LimboCustom(value: unknown, fallbackMultiplier?: number): Bet88Limbo | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const multiplier = toNumber(value.multiplier) ?? fallbackMultiplier
+  if (multiplier === undefined) {
+    return null
+  }
+
+  return {
+    multiplier,
+    winningChance: toNumber(value.winningChance) ?? 0
+  }
 }
 
-function isBet88MinesCustom(value: unknown): value is Bet88Mines {
-  return (
-    isRecord(value) &&
-    isNumberArray(value.selected) &&
-    isNumberArray(value.mines) &&
-    typeof value.mineCount === 'number'
-  )
+function normalizeBet88DiceCustom(value: unknown): Bet88Dice | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const result = value.result
+  const winningChance = value.winningChance
+
+  return {
+    result: result === undefined || result === null ? '0' : String(result),
+    winningChance: winningChance === undefined || winningChance === null ? '0' : String(winningChance)
+  }
+}
+
+function normalizeBet88MinesCustom(value: unknown): Bet88Mines | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  return {
+    selected: getNumberArray(value.selected) ?? [],
+    mines: getNumberArray(value.mines) ?? [],
+    mineCount: toNumber(value.mineCount) ?? 0
+  }
 }
 
 function inferBet88Game(custom: unknown): SupportedGameKey | null {
-  if (isBet88KenoCustom(custom)) {
+  if (normalizeBet88KenoCustom(custom)) {
     return 'keno'
   }
 
-  if (isBet88LimboCustom(custom)) {
+  if (normalizeBet88LimboCustom(custom)) {
     return 'limbo'
   }
 
-  if (isBet88DiceCustom(custom)) {
+  if (normalizeBet88DiceCustom(custom)) {
     return 'dice'
   }
 
-  if (isBet88MinesCustom(custom)) {
+  if (normalizeBet88MinesCustom(custom)) {
     return 'mines'
   }
 
@@ -255,8 +307,9 @@ function extractBet88Payload(payload: InterceptedNetworkPayload): Bet88<unknown>
   const candidates = [payload.data, isRecord(payload.data) ? payload.data.data : undefined]
 
   for (const candidate of candidates) {
-    if (isBet88Base(candidate)) {
-      return candidate
+    const match = findMatchingRecord(candidate, isBet88Base)
+    if (match) {
+      return match
     }
   }
 
@@ -292,6 +345,14 @@ function detectStakeRoute(url: string, providerData: Stake<unknown>): { game: Su
   }
 }
 
+function resolveStakePayout(game: SupportedGameKey, amount: number, payout: number, payoutMultiplier: number): number {
+  if (game === 'keno' && amount > 0 && payoutMultiplier > 0) {
+    return amount * payoutMultiplier
+  }
+
+  return payout
+}
+
 function detectBet88Route(
   url: string,
   providerData: Bet88<unknown>
@@ -322,7 +383,14 @@ function parseStakeResult(payload: InterceptedNetworkPayload): GameResult | null
   }
 
   const route = detectStakeRoute(payload.url, providerData)
-  const result: GameResult['result'] = providerData.payout > 0 || providerData.payoutMultiplier > 0 ? 'win' : 'loss'
+  const payout = resolveStakePayout(route.game, providerData.amount, providerData.payout, providerData.payoutMultiplier)
+  const profit = payout - providerData.amount
+  const result = resolveFinancialOutcome({
+    amount: providerData.amount,
+    payout,
+    profit,
+    fallbackWin: providerData.payoutMultiplier > 0
+  })
   const baseResult = {
     id: providerData.id,
     timestamp: parseTimestamp(providerData.updatedAt) ?? payload.timestamp ?? Date.now(),
@@ -331,8 +399,8 @@ function parseStakeResult(payload: InterceptedNetworkPayload): GameResult | null
     provider: 'stake' as const,
     game: route.game,
     amount: providerData.amount,
-    payout: providerData.payout,
-    profit: providerData.payout - providerData.amount,
+    payout,
+    profit,
     currency: providerData.currency,
     active: providerData.active,
     roundId: providerData.id,
@@ -357,7 +425,11 @@ function parseStakeResult(payload: InterceptedNetworkPayload): GameResult | null
           action: 'bet',
           response: {
             ...providerData,
-            state: providerData.state
+            state: {
+              ...providerData.state,
+              selectedNumbers: providerData.state.selectedNumbers,
+              drawnNumbers: providerData.state.drawnNumbers
+            }
           }
         }
       }
@@ -433,11 +505,18 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
   }
 
   const requestBody = isRecord(payload.requestBody) ? payload.requestBody : null
-  const amount = toNumber(requestBody?.amount) ?? toNumber(providerData.profit) ?? toNumber(providerData.winAmount)
   const payout = toNumber(providerData.winAmount)
   const profit =
-    toNumber(providerData.profit) ?? (payout !== undefined && amount !== undefined ? payout - amount : undefined)
-  const result: GameResult['result'] = providerData.win ? 'win' : 'loss'
+    toNumber(providerData.profit) ?? (payout !== undefined ? payout : 0) - (toNumber(requestBody?.amount) ?? 0)
+  const amount =
+    toNumber(requestBody?.amount) ??
+    (payout !== undefined && profit !== undefined ? Math.max(0, payout - profit) : undefined)
+  const result = resolveFinancialOutcome({
+    amount,
+    payout,
+    profit,
+    fallbackWin: providerData.win
+  })
 
   const baseResult = {
     timestamp: payload.timestamp ?? Date.now(),
@@ -460,7 +539,8 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
 
   switch (route.game) {
     case 'keno':
-      if (!isBet88KenoCustom(providerData.custom)) {
+      const kenoCustom = normalizeBet88KenoCustom(providerData.custom)
+      if (!kenoCustom) {
         return null
       }
 
@@ -472,13 +552,14 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
           action: 'bet',
           response: {
             ...providerData,
-            custom: providerData.custom
+            custom: kenoCustom
           }
         }
       }
 
     case 'limbo':
-      if (!isBet88LimboCustom(providerData.custom)) {
+      const limboCustom = normalizeBet88LimboCustom(providerData.custom, providerData.multiplier)
+      if (!limboCustom) {
         return null
       }
 
@@ -490,13 +571,14 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
           action: 'bet',
           response: {
             ...providerData,
-            custom: providerData.custom
+            custom: limboCustom
           }
         }
       }
 
     case 'dice':
-      if (!isBet88DiceCustom(providerData.custom)) {
+      const diceCustom = normalizeBet88DiceCustom(providerData.custom)
+      if (!diceCustom) {
         return null
       }
 
@@ -508,13 +590,14 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
           action: 'bet',
           response: {
             ...providerData,
-            custom: providerData.custom
+            custom: diceCustom
           }
         }
       }
 
     case 'mines':
-      if (route.action !== 'play' || !isBet88MinesCustom(providerData.custom)) {
+      const minesCustom = normalizeBet88MinesCustom(providerData.custom)
+      if (route.action !== 'play' || !minesCustom) {
         return null
       }
 
@@ -526,7 +609,7 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
           action: 'play',
           response: {
             ...providerData,
-            custom: providerData.custom
+            custom: minesCustom
           }
         }
       }
@@ -601,15 +684,34 @@ function findExistingResultIndex(results: GameResult[], candidate: GameResult): 
 
 async function saveGameResult(result: GameResult): Promise<void> {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['casinoResults'], async (data) => {
-      const stored = normalizeStoredData(data.casinoResults)
+    chrome.storage.local.get(['casinoResults', 'virtualBankroll'], async (data) => {
+      const virtualBankroll = normalizeVirtualBankroll(data.virtualBankroll)
+      const stored = normalizeStoredData(data.casinoResults, virtualBankroll)
+      const nextResult = applyPaperBankrollToRound({
+        ...result,
+        paperBankrollEnabled:
+          virtualBankroll.enabled === true &&
+          virtualBankroll.trackingStartedAt !== null &&
+          result.timestamp >= virtualBankroll.trackingStartedAt,
+        paperBetAmount: virtualBankroll.enabled ? virtualBankroll.baseBetAmount : undefined
+      })
       let results = [...stored.results]
 
-      const existingResultIndex = findExistingResultIndex(results, result)
+      const existingResultIndex = findExistingResultIndex(results, nextResult)
       if (existingResultIndex >= 0) {
-        results[existingResultIndex] = result
+        const existingResult = results[existingResultIndex]
+
+        // Keep the settled round when duplicate events arrive for the same
+        // provider/game/action/round. This avoids active interim responses
+        // overwriting the final outcome.
+        if (existingResult.active === false && nextResult.active === true) {
+          resolve()
+          return
+        }
+
+        results[existingResultIndex] = nextResult
       } else {
-        results.push(result)
+        results.push(nextResult)
       }
 
       if (results.length > 1000) {
@@ -620,7 +722,7 @@ async function saveGameResult(result: GameResult): Promise<void> {
 
       chrome.storage.local.set({ casinoResults: nextStored }, async () => {
         const port = await getDevServerPort()
-        await sendToDevServer(result, port)
+        await sendToDevServer(nextResult, port)
         resolve()
       })
     })

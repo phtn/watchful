@@ -1,0 +1,228 @@
+import { useEffect, useState } from 'react'
+import type { VirtualBankrollSnapshot } from '../../lib/virtual-bankroll'
+import type { VirtualBankrollState } from '../../types'
+import { formatAmount, formatDateTime, formatSignedAmount, getNetTone } from '../lib/formatters'
+
+interface VirtualBankrollCardProps {
+  bankroll: VirtualBankrollState
+  snapshot: VirtualBankrollSnapshot
+  onEnable: (seedBalance: number, baseBetAmount: number) => void
+  onDisable: () => void
+  onUpdateBaseBetAmount: (amount: number) => void
+  onReplenish: (amount: number) => void
+  onReset: () => void
+}
+
+function formatEditableNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value)
+}
+
+export function VirtualBankrollCard({
+  bankroll,
+  snapshot,
+  onEnable,
+  onDisable,
+  onUpdateBaseBetAmount,
+  onReplenish,
+  onReset
+}: VirtualBankrollCardProps) {
+  const [seedInput, setSeedInput] = useState(() => formatEditableNumber(bankroll.seedBalance))
+  const [betInput, setBetInput] = useState(() => formatEditableNumber(bankroll.baseBetAmount))
+  const [replenishInput, setReplenishInput] = useState('100')
+  const [showReplenishForm, setShowReplenishForm] = useState(false)
+
+  useEffect(() => {
+    setSeedInput(formatEditableNumber(bankroll.seedBalance))
+  }, [bankroll.seedBalance])
+
+  useEffect(() => {
+    setBetInput(formatEditableNumber(bankroll.baseBetAmount))
+  }, [bankroll.baseBetAmount])
+
+  const handleEnable = () => {
+    const parsedSeed = Number(seedInput)
+    const parsedBet = Number(betInput)
+    if (!Number.isFinite(parsedSeed) || parsedSeed < 0 || !Number.isFinite(parsedBet) || parsedBet <= 0) {
+      return
+    }
+
+    onEnable(parsedSeed, parsedBet)
+  }
+
+  const handleReplenish = () => {
+    const parsed = Number(replenishInput)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return
+    }
+
+    onReplenish(parsed)
+    setReplenishInput('100')
+    setShowReplenishForm(false)
+  }
+
+  const handleUpdateBaseBet = () => {
+    const parsed = Number(betInput)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return
+    }
+
+    onUpdateBaseBetAmount(parsed)
+  }
+
+  return (
+    <section className='rounded-[16.01px] border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+      <div className='flex items-center justify-between gap-3'>
+        <div>
+          <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Virtual Bankroll</p>
+          <h2 className='font-display mt-2 text-[1.55rem] leading-none text-slate-900'>Paper Balance</h2>
+        </div>
+        <div
+          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+            bankroll.enabled
+              ? 'border-emerald-200/80 bg-emerald-50 text-emerald-700'
+              : 'border-slate-200/80 bg-slate-50 text-slate-600'
+          }`}>
+          {bankroll.enabled ? 'Enabled' : 'Disabled'}
+        </div>
+      </div>
+
+      {bankroll.enabled ? (
+        <>
+          <div className='mt-4 grid grid-cols-2 gap-3'>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Current Balance</p>
+              <p className='mt-2 text-xl font-semibold text-slate-900'>{formatAmount(snapshot.currentBalance)}</p>
+              <p className='mt-1 text-xs text-slate-500'>Seed {formatAmount(bankroll.seedBalance)}</p>
+            </div>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Profit / Loss</p>
+              <p className={`mt-2 text-xl font-semibold ${getNetTone(snapshot.profitLoss)}`}>
+                {formatSignedAmount(snapshot.profitLoss)}
+              </p>
+              <p className='mt-1 text-xs text-slate-500'>{snapshot.trackedGames} tracked rounds</p>
+            </div>
+          </div>
+
+          <div className='mt-3 grid grid-cols-2 gap-3'>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Replenished</p>
+              <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.totalReplenished)}</p>
+            </div>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Base Bet</p>
+              <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.baseBetAmount)}</p>
+            </div>
+          </div>
+
+          <div className='mt-3 grid grid-cols-2 gap-3'>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Tracking Since</p>
+              <p className='mt-2 text-sm font-semibold text-slate-900'>
+                {snapshot.trackingStartedAt ? formatDateTime(snapshot.trackingStartedAt) : 'Not started'}
+              </p>
+            </div>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Adjust Bet Amount</p>
+              <div className='mt-2 flex gap-2'>
+                <input
+                  type='number'
+                  min='0.01'
+                  step='0.01'
+                  value={betInput}
+                  onChange={(event) => setBetInput(event.target.value)}
+                  className='min-w-0 flex-1 rounded-[14px] border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-900'
+                />
+                <button
+                  onClick={handleUpdateBaseBet}
+                  className='rounded-[14px] bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800'>
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className='mt-4 rounded-[20px] border border-white/70 bg-[linear-gradient(180deg,rgba(240,244,255,0.94),rgba(255,255,255,0.92))] p-4'>
+            <div className='flex items-center justify-between gap-3'>
+              <p className='text-[0.64rem] uppercase tracking-[0.26em] text-slate-500'>Replenish Balance</p>
+              <button
+                onClick={() => setShowReplenishForm((value) => !value)}
+                className='rounded-[14px] border border-slate-200/80 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 transition hover:border-slate-300 hover:text-slate-950'>
+                {showReplenishForm ? 'Hide' : 'Add Funds'}
+              </button>
+            </div>
+
+            {showReplenishForm ? (
+              <div className='mt-3 flex gap-2'>
+                <input
+                  type='number'
+                  min='0.01'
+                  step='0.01'
+                  value={replenishInput}
+                  onChange={(event) => setReplenishInput(event.target.value)}
+                  className='flex-1 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-900'
+                  placeholder='100'
+                />
+                <button
+                  onClick={handleReplenish}
+                  className='rounded-[18px] bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-500'>
+                  Replenish
+                </button>
+              </div>
+            ) : null}
+
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+              <button
+                onClick={onReset}
+                className='rounded-[18px] border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100'>
+                Reset Session
+              </button>
+              <button
+                onClick={onDisable}
+                className='rounded-[18px] border border-slate-200/80 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950'>
+                Disable
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className='mt-4 rounded-[20px] border border-white/70 bg-[linear-gradient(180deg,rgba(240,244,255,0.94),rgba(255,255,255,0.92))] p-4'>
+          <p className='text-sm text-slate-600'>
+            Start a paper bankroll and track balance changes from newly captured rounds only.
+          </p>
+
+          <div className='mt-4 flex gap-2'>
+            <div className='grid flex-1 grid-cols-2 gap-2'>
+              <input
+                type='number'
+                min='0'
+                step='0.01'
+                value={seedInput}
+                onChange={(event) => setSeedInput(event.target.value)}
+                className='rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-900'
+                placeholder='Starting balance'
+              />
+              <input
+                type='number'
+                min='0.01'
+                step='0.01'
+                value={betInput}
+                onChange={(event) => setBetInput(event.target.value)}
+                className='rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-900'
+                placeholder='Bet amount'
+              />
+            </div>
+            <button
+              onClick={handleEnable}
+              className='rounded-[18px] bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800'>
+              Enable
+            </button>
+          </div>
+
+          <p className='mt-3 text-xs text-slate-500'>
+            Set the starting balance and the base bet amount used when a tracked round has no usable stake value.
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
