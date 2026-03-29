@@ -1,5 +1,5 @@
 // import { GeistPixelCircle } from 'geist/font/pixel'
-import { startTransition, useDeferredValue, useEffect, useState } from 'react'
+import { startTransition, useCallback, useDeferredValue, useEffect, useState } from 'react'
 import { SUPPORTED_SITES } from '../core/siteConfig'
 import { deriveVirtualBankroll } from '../lib/virtual-bankroll'
 import {
@@ -13,12 +13,14 @@ import {
   type VirtualBankrollState
 } from '../types'
 import { EMPTY_ROULETTE_STORED_DATA, normalizeRouletteStoredData, type RouletteStoredData } from '../types/roulette'
+import { EMPTY_TENNIS_STORED_DATA, normalizeTennisStoredData, type TennisStoredData } from '../types/tennis'
 import { GameClassSwitcher, type GameClassView } from './components/GameClassSwitcher'
 import { GameEntry } from './components/GameEntry'
 import { MainHeader } from './components/Header'
 import { ProviderMetric } from './components/ProviderMetric'
 import { Pulse } from './components/Pulse'
 import { RouletteWorkspace } from './components/RouletteWorkspace'
+import { TennisWorkspace } from './components/TennisWorkspace'
 import { VirtualBankrollCard } from './components/VirtualBankrollCard'
 import { getNetTone } from './lib/formatters'
 
@@ -43,6 +45,7 @@ const App = () => {
   const [devServerPort, setDevServerPort] = useState<number>(3000)
   const [virtualBankroll, setVirtualBankroll] = useState<VirtualBankrollState>(EMPTY_VIRTUAL_BANKROLL)
   const [rouletteStats, setRouletteStats] = useState<RouletteStoredData>(EMPTY_ROULETTE_STORED_DATA)
+  const [tennisStats, setTennisStats] = useState<TennisStoredData>(EMPTY_TENNIS_STORED_DATA)
   const [activeGameClass, setActiveGameClass] = useState<GameClassView>('originals')
   const [showSettings, setShowSettings] = useState(false)
   const deferredResults = useDeferredValue(stats.results)
@@ -80,6 +83,14 @@ const App = () => {
     })
   }
 
+  const loadTennisResults = () => {
+    chrome.storage.local.get(['tennisResults'], (data) => {
+      startTransition(() => {
+        setTennisStats(normalizeTennisStoredData(data.tennisResults))
+      })
+    })
+  }
+
   const persistVirtualBankroll = (nextState: VirtualBankrollState) => {
     chrome.storage.local.set({ virtualBankroll: nextState }, () => {
       startTransition(() => {
@@ -109,6 +120,7 @@ const App = () => {
     loadDevServerPort()
     loadVirtualBankroll()
     loadRouletteResults()
+    loadTennisResults()
 
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, namespace: string) => {
       if (namespace === 'local' && changes.casinoResults) {
@@ -125,6 +137,10 @@ const App = () => {
 
       if (namespace === 'local' && changes.rouletteResults) {
         loadRouletteResults()
+      }
+
+      if (namespace === 'local' && changes.tennisResults) {
+        loadTennisResults()
       }
     }
 
@@ -165,6 +181,7 @@ const App = () => {
     const interval = window.setInterval(() => {
       loadStats()
       loadRouletteResults()
+      loadTennisResults()
     }, 4000)
 
     return () => {
@@ -179,10 +196,35 @@ const App = () => {
       return
     }
 
-    chrome.storage.local.remove(['casinoResults', 'rouletteResults'], () => {
+    chrome.storage.local.remove(['casinoResults', 'rouletteResults', 'tennisResults'], () => {
       startTransition(() => {
         setStats(EMPTY_STORED_DATA)
         setRouletteStats(EMPTY_ROULETTE_STORED_DATA)
+        setTennisStats(EMPTY_TENNIS_STORED_DATA)
+      })
+    })
+  }
+
+  const clearRouletteResults = () => {
+    if (!window.confirm('Clear captured roulette spins?')) {
+      return
+    }
+
+    chrome.storage.local.remove(['rouletteResults'], () => {
+      startTransition(() => {
+        setRouletteStats(EMPTY_ROULETTE_STORED_DATA)
+      })
+    })
+  }
+
+  const clearTennisResults = () => {
+    if (!window.confirm('Clear captured tennis board data?')) {
+      return
+    }
+
+    chrome.storage.local.remove(['tennisResults'], () => {
+      startTransition(() => {
+        setTennisStats(EMPTY_TENNIS_STORED_DATA)
       })
     })
   }
@@ -250,11 +292,25 @@ const App = () => {
     return sum + profit
   }, 0)
   const bankrollSnapshot = deriveVirtualBankroll(virtualBankroll, deferredResults)
+  const onGameClassChange = useCallback(() => {
+    const order: GameClassView[] = ['originals', 'roulette', 'tennis']
+
+    setActiveGameClass((currentValue) => {
+      const currentIndex = order.indexOf(currentValue)
+      return order[(currentIndex + 1) % order.length]
+    })
+  }, [])
 
   return (
-    <div className={` min-h-screen text-slate-950 antialiased`}>
-      <div className='mx-auto flex max-w-[440px] flex-col'>
-        <MainHeader status={status} stats={stats} latestGame={latestGame} />
+    <div className={` min-h-screen text-slate-950 bg-gray-400/80 antialiased`}>
+      <div className='mx-auto flex max-w-4xl flex-col'>
+        <MainHeader
+          status={status}
+          stats={stats}
+          latestGame={latestGame}
+          onGameClassChange={onGameClassChange}
+          gameClass={activeGameClass}
+        />
         <div className='px-6 pt-3'>
           <GameClassSwitcher value={activeGameClass} onChange={setActiveGameClass} />
         </div>
@@ -281,7 +337,7 @@ const App = () => {
               onReset={resetVirtualBankroll}
             />
             {/*<KenoRecommendation results={stats.results} />*/}
-            <section className='rounded-[16.01px] border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+            <section className='rounded-[14.01px] border border-white/60 bg-white/60 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
               <div className='flex items-center justify-between gap-3'>
                 <div>
                   <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Most Recent</p>
@@ -293,7 +349,7 @@ const App = () => {
               </div>
 
               {recentResults.length > 0 ? (
-                <div className='mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1'>
+                <div className='mt-4 max-h-[520.01px] space-y-3 overflow-y-auto pr-1'>
                   {recentResults.map((game) => (
                     <GameEntry key={game.id ?? `${game.timestamp}-${game.roundId ?? ''}`} game={game} />
                   ))}
@@ -379,9 +435,13 @@ const App = () => {
               </div>
             </section>
           </>
+        ) : activeGameClass === 'roulette' ? (
+          <div className='px-2 pt-2'>
+            <RouletteWorkspace status={status} stats={rouletteStats} onReset={clearRouletteResults} />
+          </div>
         ) : (
-          <div className='px-6 pt-2'>
-            <RouletteWorkspace status={status} stats={rouletteStats} />
+          <div className='px-2 pt-2'>
+            <TennisWorkspace status={status} stats={tennisStats} onReset={clearTennisResults} />
           </div>
         )}
       </div>

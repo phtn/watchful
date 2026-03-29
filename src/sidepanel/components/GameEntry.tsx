@@ -24,7 +24,7 @@ export function GameEntry({ game }: GameEntryProps) {
   const roundLabel = game.roundId !== undefined ? `#${String(game.roundId).slice(0, 8)}` : null
 
   return (
-    <article className='rounded-[26px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,251,0.92))] p-4 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.36)] [content-visibility:auto]'>
+    <article className='rounded-[20px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,251,0.92))] p-4 shadow-[0_18px_48px_-34px_rgba(15,23,42,0.36)] [content-visibility:auto]'>
       <div className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>

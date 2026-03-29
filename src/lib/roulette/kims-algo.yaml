@@ -1,0 +1,60 @@
+# Kim's Algo
+# A well balanced algo in defeating roulette in casinos.
+
+# Green = matches reference parser
+# Red = differs or errored
+
+name: Kim's Algo
+game: European Roulette
+complexity: low
+progressive: true
+rounds: 5
+bet_spots: numbers only and no splits
+
+overview:
+  - The algo follows the structure of 12 quadrants.
+  - Quadrants:
+    q1:
+      - integer: 1,2,5,4
+    q2:
+      - integer: 2,3,6,5
+    q3:
+      - integer: 7,8,11,10
+    q4:
+      - integer: 8,9,12,11
+    q5:
+      - integer: 13,14,17,16
+    q6:
+      - integer: 14,15,18,17
+    q7:
+      - integer: 19,20,23,22
+    q8:
+      - integer: 20,21,24,23
+    q9:
+      - integer: 25,26,29,28
+    q10:
+      - integer: 26,27,30,29
+    q11:
+      - integer: 31,32,35,34
+    q12:
+      - integer: 32,33,36,35
+
+rules:
+  - only number slots betting
+  - a minimum and maximum of 4 number bet slots per round except for rounds 4 and 5
+  - maximum of 5 rounds
+
+mechanics:
+  - start the game with any of the quadrants
+  - The game resets if you win within 5 rounds
+  - For every missed round, repeat the previous bet and place bet on the quadrant where it landed
+  - The next quadrant is chosen where the winning number is found
+  - Repeat bet and double the bet on round 3
+  - Repeat bet and double the bet on round 4 and bet the same amount on zero
+  - Repeat bet and double the bet on round 5 and bet the same amount on zero
+  - If you lost 5 rounds in a row, you've lost tragically and the game resets.
+
+# //*[@id="root"]/div/div/div[2]/div[6]/div/div[3]/div[3]/div/div[2]/div/div/div[1]/div/svg/g/rect[1]
+# //*[@id="root"]/div/div/div[2]/div[6]/div/div[3]/div[3]/div/div[2]/div/div/div[1]/div/svg/g/rect[2]
+# //*[@id="root"]/div/div/div[2]/div[6]/div/div[3]/div[3]/div/div[2]/div/div/div[1]/div/svg/g/rect[3]
+# /html/body/div[4]/div/div/div[2]/div[6]/div/div[3]/div[3]/div/div[2]/div/div/div[1]/div/svg/g/rect[3]

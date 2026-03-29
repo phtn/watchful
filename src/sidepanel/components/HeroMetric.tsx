@@ -10,11 +10,11 @@ export interface Metric {
 
 export function HeroMetric({ label, value, detail, className }: Metric) {
   return (
-    <div className={`rounded-xl border border-white/10 bg-white/8 p-2 backdrop-blur-md ` + className}>
+    <div className={`rounded-lg border-[0.5px] border-white/10 bg-white/8 px-2.5 pt-2 backdrop-blur-md ` + className}>
       <p className='text-[0.62rem] uppercase tracking-[0.26em] text-cyan-100/65'>{label}</p>
-      <div className='w-full flex items-end justify-between'>
-        <p className='mt-2 text-xl font-semibold text-white font-tri'>{value}</p>
-        <p className='mt-1 text-xs text-slate-300'>{detail}</p>
+      <div className='mt-2 w-full flex items-center justify-between'>
+        <p className='text-lg font-semibold text-white font-tri'>{value}</p>
+        <p className='text-[8px] text-slate-300'>{detail}</p>
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import { applyPaperBankrollToRound } from '../lib/paper-bankroll'
 import { resolveFinancialOutcome } from '../lib/result-outcome'
+import { extractTennisEvents, hasTennisSurface } from '../lib/tennis/scrape'
 import {
   normalizeStoredData,
   normalizeVirtualBankroll,
@@ -23,6 +24,7 @@ import type {
   StakeMinesCashOut,
   StakeMinesNext
 } from '../types/stake'
+import { summarizeTennisEvents, type TennisEvent } from '../types/tennis'
 import { getSupportedSite } from './siteConfig'
 
 interface InterceptedNetworkPayload {
@@ -38,6 +40,9 @@ interface InterceptedNetworkPayload {
 type UnknownRecord = Record<string, unknown>
 type StakeAction = 'bet' | 'roll' | 'next' | 'cashout'
 type Bet88Action = 'bet' | 'play'
+
+let tennisSyncTimer: number | null = null
+let lastTennisSignature = ''
 
 const script = document.createElement('script')
 script.src = chrome.runtime.getURL('dist/injected.js')
@@ -862,3 +867,114 @@ async function saveRouletteResult(result: RouletteSpinResult): Promise<void> {
     })
   })
 }
+
+function saveTennisEvents(events: TennisEvent[]): void {
+  const nextSignature = JSON.stringify(
+    events.map((event) => ({
+      id: event.id,
+      provider: event.provider,
+      href: event.href,
+      statusLabel: event.statusLabel,
+      tour: event.tour,
+      tournament: event.tournament,
+      players: event.players,
+      markets: event.markets
+    }))
+  )
+
+  if (nextSignature === lastTennisSignature) {
+    return
+  }
+
+  lastTennisSignature = nextSignature
+  chrome.storage.local.set({ tennisResults: summarizeTennisEvents(events) })
+}
+
+function getTennisCapturePageUrl(): string {
+  const currentUrl = window.location.href
+
+  if (currentUrl && !currentUrl.startsWith('about:blank') && !currentUrl.startsWith('blob:')) {
+    return currentUrl
+  }
+
+  if (document.referrer) {
+    return document.referrer
+  }
+
+  return currentUrl
+}
+
+function getTennisCaptureSite(): 'stake' | 'bet88' | null {
+  const site = getSupportedSite(getTennisCapturePageUrl())?.key
+  if (site === 'stake' || site === 'bet88') {
+    return site
+  }
+
+  return null
+}
+
+function isTennisCaptureContext(): boolean {
+  const site = getTennisCaptureSite()
+  return site === 'stake'
+}
+
+function syncTennisBoardSnapshot(): void {
+  if (!isTennisCaptureContext() || !hasTennisSurface(document)) {
+    return
+  }
+
+  const pageUrl = getTennisCapturePageUrl()
+  const site = getTennisCaptureSite()
+  if (site !== 'stake') {
+    return
+  }
+
+  const events = extractTennisEvents(document, pageUrl, site)
+
+  if (events.length === 0) {
+    return
+  }
+
+  saveTennisEvents(events)
+}
+
+function scheduleTennisBoardSync(): void {
+  if (tennisSyncTimer !== null) {
+    window.clearTimeout(tennisSyncTimer)
+  }
+
+  tennisSyncTimer = window.setTimeout(() => {
+    tennisSyncTimer = null
+    syncTennisBoardSnapshot()
+  }, 220)
+}
+
+function initTennisCapture(): void {
+  if (!isTennisCaptureContext()) {
+    return
+  }
+
+  const root = document.documentElement
+  if (!root) {
+    window.addEventListener('DOMContentLoaded', initTennisCapture, { once: true })
+    return
+  }
+
+  const observer = new MutationObserver(() => {
+    scheduleTennisBoardSync()
+  })
+
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    characterData: true
+  })
+
+  window.addEventListener('load', scheduleTennisBoardSync, { once: true })
+  window.addEventListener('popstate', scheduleTennisBoardSync)
+  window.addEventListener('hashchange', scheduleTennisBoardSync)
+
+  scheduleTennisBoardSync()
+}
+
+initTennisCapture()

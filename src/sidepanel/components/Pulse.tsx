@@ -12,7 +12,7 @@ interface PulseProps {
 }
 export const Pulse = ({ requestUrlStatus, clearData, totalStaked, netProfit, latestGame, getNetTone }: PulseProps) => {
   return (
-    <section className='rounded-t-[12.01px] border border-neutral-300 border-b-0 bg-white/76 p-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+    <section className='rounded-t-[12.01px] border border-neutral-300 border-b-0 bg-orange-200 p-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
       <div className='flex items-center justify-between gap-4'>
         <div className='flex h-full flex-col justify-end flex-1 space-y-1'>
           <div className='flex items-center space-x-2'>
