@@ -18,6 +18,10 @@ function getEffectiveAmount(result: GameResult, fallbackBetAmount: number): numb
     return result.amount
   }
 
+  if (isFiniteNumber(result.paperBetAmount) && result.paperBetAmount > 0) {
+    return result.paperBetAmount
+  }
+
   return fallbackBetAmount > 0 ? fallbackBetAmount : 0
 }
 

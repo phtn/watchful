@@ -109,6 +109,23 @@ function getStoredPort(value: unknown): number {
   return toNumber(value) ?? 3000
 }
 
+function getStakeInputBetAmount(): number | undefined {
+  const stakeInput = document.querySelector<HTMLInputElement>('input.svelte-dka04o')
+  if (!stakeInput) {
+    return undefined
+  }
+
+  const rawValue = stakeInput.value.trim()
+  if (!rawValue) {
+    return undefined
+  }
+
+  const normalizedValue = rawValue.replace(/,/g, '')
+  const amount = toNumber(normalizedValue)
+
+  return amount !== undefined && amount > 0 ? amount : undefined
+}
+
 function isNumberArray(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'number' && Number.isFinite(entry))
 }
@@ -802,13 +819,16 @@ async function saveGameResult(result: GameResult): Promise<void> {
     chrome.storage.local.get(['casinoResults', 'virtualBankroll'], async (data) => {
       const virtualBankroll = normalizeVirtualBankroll(data.virtualBankroll)
       const stored = normalizeStoredData(data.casinoResults, virtualBankroll)
+      const stakeInputBetAmount = result.provider === 'stake' ? getStakeInputBetAmount() : undefined
+      const effectivePaperBetAmount =
+        virtualBankroll.enabled === true ? (stakeInputBetAmount ?? virtualBankroll.baseBetAmount) : undefined
       const nextResult = applyPaperBankrollToRound({
         ...result,
         paperBankrollEnabled:
           virtualBankroll.enabled === true &&
           virtualBankroll.trackingStartedAt !== null &&
           result.timestamp >= virtualBankroll.trackingStartedAt,
-        paperBetAmount: virtualBankroll.enabled ? virtualBankroll.baseBetAmount : undefined
+        paperBetAmount: effectivePaperBetAmount
       })
       let results = [...stored.results]
 

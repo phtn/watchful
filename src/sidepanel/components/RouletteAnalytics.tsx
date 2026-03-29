@@ -126,6 +126,44 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
   return (
     <div className='space-y-2 text-white p-1'>
       <div className='mx-auto space-y-2'>
+        {/* Hot & Cold Numbers */}
+        <div className='grid lg:grid-cols-2 gap-1'>
+          <div className={cn('rounded-lg p-4', cardClassName)}>
+            <div className='flex items-center gap-2 mb-6'>
+              {/*<Flame size={20} className='text-orange-400' />*/}
+              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
+              <h2 className='font-clash font-semibold text-white uppercase'>Hot</h2>
+              <span className='text-xs text-neutral-500 ml-auto'>Most frequent</span>
+            </div>
+            <div className='flex flex-wrap gap-3'>
+              {stats.hotNumbers.length > 0 ? (
+                stats.hotNumbers.map(([num, count]) => (
+                  <NumberBadge key={num} number={num} count={count} isHot={true} />
+                ))
+              ) : (
+                <p className='text-neutral-500 text-sm'>No data yet</p>
+              )}
+            </div>
+          </div>
+
+          <div className={cn('rounded-lg p-4', cardClassName)}>
+            <div className='flex items-center gap-2 mb-6'>
+              {/*<Snowflake size={20} className='text-cyan-400' />*/}
+              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
+              <h2 className='font-clash font-semibold text-white uppercase'>Cold</h2>
+              <span className='text-xs text-neutral-500 ml-auto'>Least frequent</span>
+            </div>
+            <div className='flex flex-wrap gap-3'>
+              {stats.coldNumbers.length > 0 ? (
+                stats.coldNumbers.map(([num, count]) => (
+                  <NumberBadge key={num} number={num} count={count} isHot={false} />
+                ))
+              ) : (
+                <p className='text-neutral-500 text-sm'>No data yet</p>
+              )}
+            </div>
+          </div>
+        </div>
         {/* Recent Numbers Strip */}
 
         {/* Stats Overview */}
@@ -288,45 +326,6 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
                   <p className='text-neutral-500 leading-relaxed'>1,6,9,14,17,20,31,34</p>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Hot & Cold Numbers */}
-        <div className='grid lg:grid-cols-2 gap-1'>
-          <div className={cn('rounded-lg p-4', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Flame size={20} className='text-orange-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Hot</h2>
-              <span className='text-xs text-neutral-500 ml-auto'>Most frequent</span>
-            </div>
-            <div className='flex flex-wrap gap-3'>
-              {stats.hotNumbers.length > 0 ? (
-                stats.hotNumbers.map(([num, count]) => (
-                  <NumberBadge key={num} number={num} count={count} isHot={true} />
-                ))
-              ) : (
-                <p className='text-neutral-500 text-sm'>No data yet</p>
-              )}
-            </div>
-          </div>
-
-          <div className={cn('rounded-lg p-4', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Snowflake size={20} className='text-cyan-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Cold</h2>
-              <span className='text-xs text-neutral-500 ml-auto'>Least frequent</span>
-            </div>
-            <div className='flex flex-wrap gap-3'>
-              {stats.coldNumbers.length > 0 ? (
-                stats.coldNumbers.map(([num, count]) => (
-                  <NumberBadge key={num} number={num} count={count} isHot={false} />
-                ))
-              ) : (
-                <p className='text-neutral-500 text-sm'>No data yet</p>
-              )}
             </div>
           </div>
         </div>

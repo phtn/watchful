@@ -97,7 +97,7 @@ export function VirtualBankrollCard({
       <CompactMetric data={fields} />
       {bankroll.enabled ? (
         <>
-          <div className='hidden mt-4 _grid grid-cols-2 gap-3'>
+          <div className='hidden _grid grid-cols-2 mt-4 gap-3'>
             <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Current Balance</p>
               <p className='mt-2 text-xl font-semibold text-slate-900'>{formatAmount(snapshot.currentBalance)}</p>
@@ -113,24 +113,24 @@ export function VirtualBankrollCard({
           </div>
 
           <div className='hidden _grid grid-cols-2 gap-3 mt-3'>
-            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+            {/*<div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Replenished</p>
               <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.totalReplenished)}</p>
-            </div>
-            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+            </div>*/}
+            {/*<div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Base Bet</p>
               <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.baseBetAmount)}</p>
-            </div>
+            </div>*/}
           </div>
 
-          <div className='hidden _grid grid-cols-2 gap-3 mt-3'>
+          <div className='grid grid-cols-2 gap-3 mt-3'>
             <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Tracking Since</p>
               <p className='mt-2 text-sm font-semibold text-slate-900'>
                 {snapshot.trackingStartedAt ? formatDateTime(snapshot.trackingStartedAt) : 'Not started'}
               </p>
             </div>
-            <div className='hidden rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
+            <div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Adjust Bet Amount</p>
               <div className='mt-2 flex gap-2'>
                 <input

@@ -1,5 +1,5 @@
 import type { GameResult } from '../../types'
-import { formatGameLabel, formatScalar } from './formatters'
+import { formatAmount, formatGameLabel, formatScalar } from './formatters'
 
 export interface GameInsightTrack {
   label: string
@@ -17,6 +17,10 @@ export interface GameInsights {
 export function getGameInsights(game: GameResult): GameInsights {
   const chips: string[] = []
   const tracks: GameInsightTrack[] = []
+
+  if (typeof game.amount === 'number' && Number.isFinite(game.amount) && game.amount > 0) {
+    chips.push(`Bet ${formatAmount(game.amount, game.currency)}`)
+  }
 
   if (game.providerData.provider === 'stake') {
     if (game.providerData.game === 'keno') {
@@ -44,8 +48,9 @@ export function getGameInsights(game: GameResult): GameInsights {
     }
 
     if (game.providerData.game === 'limbo') {
-      chips.push(`Target x${formatScalar(game.providerData.response.state.multiplierTarget)}`)
-      chips.push(`Result x${formatScalar(game.providerData.response.state.result)}`)
+      // chips.push(`Bet x${formatScalar(game.providerData.response.state.betAmount)}`)
+      chips.push(`Target ${formatScalar(game.providerData.response.state.multiplierTarget)}`)
+      chips.push(`Result ${formatScalar(game.providerData.response.state.result)}`)
       return { chips, tracks }
     }
 

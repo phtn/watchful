@@ -42,6 +42,7 @@ function getStoredPort(value: unknown): number {
 const App = () => {
   const [stats, setStats] = useState<StoredData>(EMPTY_STORED_DATA)
   const [status, setStatus] = useState<PanelStatus>(INITIAL_STATUS)
+  const [simulated, setSimulated] = useState<boolean>(false)
   const [devServerPort, setDevServerPort] = useState<number>(3000)
   const [virtualBankroll, setVirtualBankroll] = useState<VirtualBankrollState>(EMPTY_VIRTUAL_BANKROLL)
   const [rouletteStats, setRouletteStats] = useState<RouletteStoredData>(EMPTY_ROULETTE_STORED_DATA)
@@ -301,8 +302,12 @@ const App = () => {
     })
   }, [])
 
+  const toggleSimulated = useCallback(() => {
+    setSimulated((prev) => !prev)
+  }, [])
+
   return (
-    <div className={` min-h-screen text-slate-950 bg-gray-400/80 antialiased`}>
+    <div className={`min-h-screen text-slate-950 bg-gray-400/80 antialiased`}>
       <div className='mx-auto flex max-w-4xl flex-col'>
         <MainHeader
           status={status}
@@ -311,7 +316,7 @@ const App = () => {
           onGameClassChange={onGameClassChange}
           gameClass={activeGameClass}
         />
-        <div className='px-6 pt-3'>
+        <div className='hidden px-6 pt-3'>
           <GameClassSwitcher value={activeGameClass} onChange={setActiveGameClass} />
         </div>
 
@@ -325,19 +330,23 @@ const App = () => {
                 netProfit={netProfit}
                 latestGame={latestGame}
                 getNetTone={getNetTone}
+                simulated={simulated}
+                toggleSimulated={toggleSimulated}
               />
             </div>
-            <VirtualBankrollCard
-              bankroll={virtualBankroll}
-              snapshot={bankrollSnapshot}
-              onEnable={enableVirtualBankroll}
-              onDisable={disableVirtualBankroll}
-              onUpdateBaseBetAmount={updateVirtualBankrollBetAmount}
-              onReplenish={replenishVirtualBankroll}
-              onReset={resetVirtualBankroll}
-            />
+            {simulated && (
+              <VirtualBankrollCard
+                bankroll={virtualBankroll}
+                snapshot={bankrollSnapshot}
+                onEnable={enableVirtualBankroll}
+                onDisable={disableVirtualBankroll}
+                onUpdateBaseBetAmount={updateVirtualBankrollBetAmount}
+                onReplenish={replenishVirtualBankroll}
+                onReset={resetVirtualBankroll}
+              />
+            )}
             {/*<KenoRecommendation results={stats.results} />*/}
-            <section className='rounded-[14.01px] border border-white/60 bg-white/60 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+            <section className='rounded-none border border-white/60 bg-white/60 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
               <div className='flex items-center justify-between gap-3'>
                 <div>
                   <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Most Recent</p>
@@ -363,7 +372,7 @@ const App = () => {
                 </div>
               )}
             </section>
-            <section className='rounded-[16.01px] border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
+            <section className='rounded-none border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
               <div className='flex items-center justify-between gap-3'>
                 <div>
                   <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Network Surface</p>

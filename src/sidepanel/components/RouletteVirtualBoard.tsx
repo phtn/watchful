@@ -3,6 +3,9 @@ import {
   BOARD_ROWS,
   KIMS_ALGO_QUADRANTS,
   createKimAlgoBetPlan,
+  getKimQuadrantsContainingNumber,
+  resolveKimAutoStartingQuadrant,
+  resolveKimQuadrantPreference,
   simulateKimsAlgo,
   type KimQuadrantId,
   type KimSpreadSelectionMode
@@ -15,8 +18,6 @@ interface RouletteVirtualBoardProps {
   status: PanelStatus
   winningNumbers: readonly number[]
 }
-
-const QUADRANT_IDS = Object.keys(KIMS_ALGO_QUADRANTS) as KimQuadrantId[]
 
 function formatQuadrantLabel(quadrant: KimQuadrantId): string {
   return quadrant.toUpperCase()
@@ -90,6 +91,7 @@ function StepTone({ value }: { value: string }) {
 
 export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtualBoardProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
+  const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
   const [baseUnitInput, setBaseUnitInput] = useState('1')
   const [isTracking, setIsTracking] = useState(false)
   const [allowOverlaps, setAllowOverlaps] = useState(false)
@@ -99,7 +101,27 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
 
   const parsedBaseUnit = Number.parseFloat(baseUnitInput)
   const baseUnit = Number.isFinite(parsedBaseUnit) && parsedBaseUnit > 0 ? parsedBaseUnit : 1
-  const hotNumbers = useMemo(() => getHotNumbers(trackedWinningNumbers), [trackedWinningNumbers])
+  const hotNumberSource = isTracking ? trackedWinningNumbers : winningNumbers
+  const hotNumbers = useMemo(() => getHotNumbers(hotNumberSource), [hotNumberSource])
+  const selectedStartingQuadrantNumbers = useMemo(
+    () => new Set(KIMS_ALGO_QUADRANTS[startingQuadrant]),
+    [startingQuadrant]
+  )
+  const hoveredQuadrantNumbers = useMemo(
+    () => new Set(hoveredQuadrant ? KIMS_ALGO_QUADRANTS[hoveredQuadrant] : []),
+    [hoveredQuadrant]
+  )
+  const autoStartingQuadrant = useMemo(
+    () => (!isTracking ? resolveKimAutoStartingQuadrant(winningNumbers, hotNumbers, startingQuadrant) : null),
+    [hotNumbers, isTracking, startingQuadrant, winningNumbers]
+  )
+
+  useEffect(() => {
+    if (!isTracking && autoStartingQuadrant && autoStartingQuadrant !== startingQuadrant) {
+      setStartingQuadrant(autoStartingQuadrant)
+    }
+  }, [autoStartingQuadrant, isTracking, startingQuadrant])
+
   const simulation = simulateKimsAlgo(trackedWinningNumbers, {
     startingQuadrant,
     baseUnit,
@@ -138,6 +160,10 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
     if (isTracking) {
       setIsTracking(false)
       return
+    }
+
+    if (autoStartingQuadrant) {
+      setStartingQuadrant(autoStartingQuadrant)
     }
 
     setTrackedWinningNumbers([])
@@ -240,15 +266,50 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
                     const effectiveMultiplier = getEffectiveStakeMultiplier(nextBet.unitStake, baseUnit, placementCount)
                     const isActive = placementCount > 0
                     const isLatest = latestWinningNumber === value
+                    const interactiveQuadrant = resolveKimQuadrantPreference(
+                      getKimQuadrantsContainingNumber(value),
+                      hotNumbers,
+                      startingQuadrant
+                    )
+                    const isStartingQuadrantTrigger = interactiveQuadrant !== null
+                    const isSelectedStartingQuadrant = selectedStartingQuadrantNumbers.has(value)
+                    const isHoveredQuadrantMember = hoveredQuadrantNumbers.has(value)
 
                     return (
-                      <div
+                      <button
                         key={value}
+                        type='button'
+                        onClick={() => {
+                          if (interactiveQuadrant) {
+                            setStartingQuadrant(interactiveQuadrant)
+                          }
+                        }}
+                        onMouseEnter={() => {
+                          if (interactiveQuadrant) {
+                            setHoveredQuadrant(interactiveQuadrant)
+                          }
+                        }}
+                        onMouseLeave={() => setHoveredQuadrant(null)}
+                        onFocus={() => {
+                          if (interactiveQuadrant) {
+                            setHoveredQuadrant(interactiveQuadrant)
+                          }
+                        }}
+                        onBlur={() => setHoveredQuadrant(null)}
+                        disabled={!interactiveQuadrant}
+                        title={
+                          interactiveQuadrant
+                            ? `${formatQuadrantLabel(interactiveQuadrant)} · set start quadrant`
+                            : undefined
+                        }
                         className={cn(
-                          'relative flex h-10 w-auto space-y-2 aspect-square items-center justify-center rounded-xl border text-sm font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all',
+                          'relative flex h-10 w-auto space-y-2 aspect-square items-center justify-center rounded-xl border text-sm font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
                           getNumberTone(value),
                           isActive && 'ring-2 ring-emerald-300/75 ring-offset-1 ring-offset-slate-950',
-                          isLatest && 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.55)]'
+                          isLatest && 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.55)]',
+                          isHoveredQuadrantMember && 'ring-2 ring-white/70 ring-offset-1 ring-offset-slate-950',
+                          isStartingQuadrantTrigger && 'cursor-pointer hover:border-white',
+                          isSelectedStartingQuadrant && 'border-white/90 shadow-[0_0_0_1px_rgba(255,255,255,0.22)]'
                         )}>
                         {value}
                         {isActive && effectiveMultiplier > 1 ? (
@@ -263,14 +324,22 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
                             <span className='scale-75'>{effectiveMultiplier}</span>
                           </span>
                         ) : null}
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
               ))}
             </div>
           </div>
-          <div className='mt-4 grid gap-2 grid-cols-5'>
+          <div className='mt-3 text-xs text-slate-400'>
+            Hover a quadrant corner pocket to preview all four numbers, or click it to set the starting quadrant.
+            {!isTracking && autoStartingQuadrant ? (
+              <span className='block mt-1 text-slate-500'>
+                Auto idle start: {formatQuadrantLabel(autoStartingQuadrant)} from the latest shared pair.
+              </span>
+            ) : null}
+          </div>
+          <div className='mt-4 grid gap-2 grid-cols-3'>
             <div className='rounded-2xl border border-white/10 bg-white/5 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>round</p>
               <p className='mt-2 text-2xl font-semibold text-white'>{nextBet.round}</p>
@@ -289,19 +358,6 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
                 onChange={(event) => setBaseUnitInput(event.target.value)}
                 className='mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none'
               />
-            </label>
-            <label className='col-span-2 rounded-2xl border border-white/10 bg-white/5 p-3'>
-              <span className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Starting quadrant</span>
-              <select
-                value={startingQuadrant}
-                onChange={(event) => setStartingQuadrant(event.target.value as KimQuadrantId)}
-                className='mt-2 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white outline-none'>
-                {QUADRANT_IDS.map((quadrant) => (
-                  <option key={quadrant} value={quadrant}>
-                    {formatQuadrantLabel(quadrant)} · {KIMS_ALGO_QUADRANTS[quadrant].join(', ')}
-                  </option>
-                ))}
-              </select>
             </label>
           </div>
           <div className='grid grid-cols-3 mt-2 gap-2'>

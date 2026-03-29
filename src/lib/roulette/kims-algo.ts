@@ -85,6 +85,7 @@ export const KIMS_ALGO_ASSUMPTIONS = [
   'The round ladder counts straight-up number placements, not unique board coverage: round 1 places 4 numbers, round 2 places 8, round 3 places 12, round 4 places 16 plus zero, and round 5 places 20 plus zero.',
   'Per-number stake progression is interpreted as [1x, 1x, 2x, 4x, 8x].',
   'Overlap mode defaults to off. When a new quadrant would overlap an existing paired quadrant, the overlapping half is replaced by hot-prioritized local spread picks.',
+  'Idle auto-start uses the latest two logged numbers when they share a quadrant; shared top-vs-bottom ties are broken by hot-number density, then hot rank, then current quadrant.',
   'Zero is hedged on rounds 4 and 5 with the same per-number stake used on the quadrant.',
   'After each miss, the next quadrant is chosen from the landed number and added to the active sequence before the next round begins.',
   'If a winning number belongs to multiple quadrants, the selector prefers a quadrant that has not already appeared in the active sequence; ties break by proximity to the current quadrant id, then by lower quadrant id.',
@@ -143,6 +144,80 @@ export function getKimQuadrantsContainingNumber(number: number): KimQuadrantId[]
   return (Object.entries(KIMS_ALGO_QUADRANTS) as Array<[KimQuadrantId, readonly number[]]>)
     .filter(([, values]) => values.includes(number))
     .map(([quadrantId]) => quadrantId)
+}
+
+export function getKimQuadrantsContainingPair(firstNumber: number, secondNumber: number): KimQuadrantId[] {
+  assertValidSpinNumber(firstNumber)
+  assertValidSpinNumber(secondNumber)
+
+  const secondQuadrants = new Set(getKimQuadrantsContainingNumber(secondNumber))
+  return getKimQuadrantsContainingNumber(firstNumber).filter((quadrant) => secondQuadrants.has(quadrant))
+}
+
+export function resolveKimQuadrantPreference(
+  candidateQuadrants: readonly KimQuadrantId[],
+  hotNumbers: readonly number[],
+  currentQuadrant?: KimQuadrantId
+): KimQuadrantId | null {
+  if (candidateQuadrants.length === 0) {
+    return null
+  }
+
+  if (candidateQuadrants.length === 1) {
+    return candidateQuadrants[0]
+  }
+
+  const hotNumberRanks = new Map(hotNumbers.map((value, index) => [value, index]))
+
+  return [...candidateQuadrants].sort((left, right) => {
+    const leftNumbers = KIMS_ALGO_QUADRANTS[left]
+    const rightNumbers = KIMS_ALGO_QUADRANTS[right]
+    const leftHotCount = leftNumbers.filter((value) => hotNumberRanks.has(value)).length
+    const rightHotCount = rightNumbers.filter((value) => hotNumberRanks.has(value)).length
+
+    if (leftHotCount !== rightHotCount) {
+      return rightHotCount - leftHotCount
+    }
+
+    const leftHotRankScore = leftNumbers.reduce((score, value) => {
+      const rank = hotNumberRanks.get(value)
+      return score + (rank === undefined ? 0 : hotNumbers.length - rank)
+    }, 0)
+    const rightHotRankScore = rightNumbers.reduce((score, value) => {
+      const rank = hotNumberRanks.get(value)
+      return score + (rank === undefined ? 0 : hotNumbers.length - rank)
+    }, 0)
+
+    if (leftHotRankScore !== rightHotRankScore) {
+      return rightHotRankScore - leftHotRankScore
+    }
+
+    if (currentQuadrant) {
+      const leftMatchesCurrent = left === currentQuadrant
+      const rightMatchesCurrent = right === currentQuadrant
+
+      if (leftMatchesCurrent !== rightMatchesCurrent) {
+        return leftMatchesCurrent ? -1 : 1
+      }
+    }
+
+    return getQuadrantIndex(left) - getQuadrantIndex(right)
+  })[0]
+}
+
+export function resolveKimAutoStartingQuadrant(
+  spins: readonly number[],
+  hotNumbers: readonly number[],
+  currentQuadrant?: KimQuadrantId
+): KimQuadrantId | null {
+  if (spins.length < 2) {
+    return null
+  }
+
+  const [firstNumber, secondNumber] = spins.slice(-2)
+  const candidateQuadrants = getKimQuadrantsContainingPair(firstNumber, secondNumber)
+
+  return resolveKimQuadrantPreference(candidateQuadrants, hotNumbers, currentQuadrant)
 }
 
 function resolveQuadrantPlacements(
@@ -211,6 +286,29 @@ function resolveQuadrantPlacements(
 
 function appendKimQuadrant(quadrants: readonly KimQuadrantId[], nextQuadrant: KimQuadrantId): KimQuadrantId[] {
   return [...quadrants, nextQuadrant]
+}
+
+function summarizeKimWinStreaks(steps: readonly KimAlgoStep[]): KimAlgoSimulation['stats'] {
+  let winCount = 0
+  let currentWinStreak = 0
+  let bestWinStreak = 0
+
+  for (const step of steps) {
+    if (step.hitType === 'miss') {
+      currentWinStreak = 0
+      continue
+    }
+
+    winCount += 1
+    currentWinStreak += 1
+    bestWinStreak = Math.max(bestWinStreak, currentWinStreak)
+  }
+
+  return {
+    winCount,
+    currentWinStreak,
+    bestWinStreak
+  }
 }
 
 export function selectKimQuadrant(
@@ -384,30 +482,11 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
     return step
   })
 
-  let winCount = 0
-  let currentWinStreak = 0
-  let bestWinStreak = 0
-
-  for (const step of steps) {
-    if (step.hit) {
-      winCount += 1
-      currentWinStreak += 1
-      bestWinStreak = Math.max(bestWinStreak, currentWinStreak)
-      continue
-    }
-
-    currentWinStreak = 0
-  }
-
   return {
     options: resolvedOptions,
     assumptions: [...KIMS_ALGO_ASSUMPTIONS],
     steps,
-    stats: {
-      winCount,
-      currentWinStreak,
-      bestWinStreak
-    },
+    stats: summarizeKimWinStreaks(steps),
     finalState: {
       nextRound: activeRound,
       nextQuadrant: activeQuadrant,
