@@ -307,7 +307,7 @@ const App = () => {
   }, [])
 
   return (
-    <div className={`min-h-screen text-slate-950 bg-gray-400/80 antialiased`}>
+    <div className={`min-h-screen text-slate-950 bg-[#282828] antialiased`}>
       <div className='mx-auto flex max-w-4xl flex-col'>
         <MainHeader
           status={status}

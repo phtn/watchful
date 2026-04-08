@@ -69,6 +69,22 @@
     )
   }
 
+  function looksLikePragmaticRouletteMessage(value: unknown): boolean {
+    return (
+      isRecord(value) &&
+      isRecord(value.gameresult) &&
+      typeof value.gameresult.score === 'string' &&
+      typeof value.gameresult.pre === 'string' &&
+      typeof value.gameresult.megaWin === 'string' &&
+      typeof value.gameresult.color === 'string' &&
+      typeof value.gameresult.luckyWin === 'string' &&
+      typeof value.gameresult.id === 'string' &&
+      typeof value.gameresult.time === 'string' &&
+      typeof value.gameresult.seq === 'number' &&
+      typeof value.gameresult.value === 'string'
+    )
+  }
+
   function responseLooksGameRelated(value: unknown, depth = 0): boolean {
     if (depth > 3 || value == null) {
       return false
@@ -78,7 +94,12 @@
       return hasGameKeyword(value)
     }
 
-    if (looksLikeBet88Result(value) || looksLikeStakeBetPayload(value) || looksLikeEvoRouletteMessage(value)) {
+    if (
+      looksLikeBet88Result(value) ||
+      looksLikeStakeBetPayload(value) ||
+      looksLikeEvoRouletteMessage(value) ||
+      looksLikePragmaticRouletteMessage(value)
+    ) {
       return true
     }
 

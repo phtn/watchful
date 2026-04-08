@@ -16,22 +16,58 @@ export interface EvoMessage {
   time: number
 }
 
-export interface RouletteSpinResult {
+export interface PragmaticPlayGameResult {
+  score: string
+  pre: string
+  megaWin: string
+  color: string
+  luckyWin: string
   id: string
-  provider: 'stake'
-  source: 'evolution'
+  time: string
+  seq: number
+  value: string
+}
+
+export interface PragmaticPlayMessage {
+  gameresult: PragmaticPlayGameResult
+}
+
+interface RouletteSpinResultBase {
+  id: string
+  provider: 'stake' | 'bet88'
+  source: 'evolution' | 'pragmatic-play'
   game: 'roulette'
-  eventType: 'winSpots'
-  gameId: string
-  code: string
   description: string
-  winSpots: Record<string, unknown>
-  resultNumbers: number[]
   winningNumber: number
   timestamp: number
   updatedAt: string
   url: string
 }
+
+export interface EvolutionRouletteSpinResult extends RouletteSpinResultBase {
+  provider: 'stake'
+  source: 'evolution'
+  eventType: 'winSpots'
+  gameId: string
+  code: string
+  winSpots: Record<string, unknown>
+  resultNumbers: number[]
+}
+
+export interface PragmaticPlayRouletteSpinResult extends RouletteSpinResultBase {
+  provider: 'bet88'
+  source: 'pragmatic-play'
+  eventType: 'gameresult'
+  score: string
+  color: string
+  sequence: number
+  rawValue: string
+  isPreResult: boolean
+  isMegaWin: boolean
+  isLuckyWin: boolean
+}
+
+export type RouletteSpinResult = EvolutionRouletteSpinResult | PragmaticPlayRouletteSpinResult
 
 export interface RouletteStoredData {
   results: RouletteSpinResult[]
@@ -59,21 +95,18 @@ function isResultNumbers(value: unknown): value is number[] {
   return Array.isArray(value) && value.every((entry) => Number.isInteger(entry) && entry >= 0 && entry <= 36)
 }
 
-function isRouletteSpinResult(value: unknown): value is RouletteSpinResult {
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean'
+}
+
+function hasBaseRouletteSpinFields(value: unknown): value is RouletteSpinResultBase {
   const winningNumber = isRecord(value) ? value.winningNumber : null
 
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
-    value.provider === 'stake' &&
-    value.source === 'evolution' &&
     value.game === 'roulette' &&
-    value.eventType === 'winSpots' &&
-    typeof value.gameId === 'string' &&
-    typeof value.code === 'string' &&
     typeof value.description === 'string' &&
-    isRecord(value.winSpots) &&
-    isResultNumbers(value.resultNumbers) &&
     typeof winningNumber === 'number' &&
     Number.isInteger(winningNumber) &&
     winningNumber >= 0 &&
@@ -82,6 +115,41 @@ function isRouletteSpinResult(value: unknown): value is RouletteSpinResult {
     typeof value.updatedAt === 'string' &&
     typeof value.url === 'string'
   )
+}
+
+function isEvolutionRouletteSpinResult(value: unknown): value is EvolutionRouletteSpinResult {
+  return (
+    hasBaseRouletteSpinFields(value) &&
+    isRecord(value) &&
+    value.provider === 'stake' &&
+    value.source === 'evolution' &&
+    value.eventType === 'winSpots' &&
+    typeof value.gameId === 'string' &&
+    typeof value.code === 'string' &&
+    isRecord(value.winSpots) &&
+    isResultNumbers(value.resultNumbers)
+  )
+}
+
+function isPragmaticPlayRouletteSpinResult(value: unknown): value is PragmaticPlayRouletteSpinResult {
+  return (
+    hasBaseRouletteSpinFields(value) &&
+    isRecord(value) &&
+    value.provider === 'bet88' &&
+    value.source === 'pragmatic-play' &&
+    value.eventType === 'gameresult' &&
+    typeof value.score === 'string' &&
+    typeof value.color === 'string' &&
+    typeof value.sequence === 'number' &&
+    typeof value.rawValue === 'string' &&
+    isBoolean(value.isPreResult) &&
+    isBoolean(value.isMegaWin) &&
+    isBoolean(value.isLuckyWin)
+  )
+}
+
+function isRouletteSpinResult(value: unknown): value is RouletteSpinResult {
+  return isEvolutionRouletteSpinResult(value) || isPragmaticPlayRouletteSpinResult(value)
 }
 
 export function summarizeRouletteResults(results: RouletteSpinResult[]): RouletteStoredData {

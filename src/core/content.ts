@@ -13,6 +13,7 @@ import {
   normalizeRouletteStoredData,
   summarizeRouletteResults,
   type EvoMessage,
+  type PragmaticPlayMessage,
   type RouletteSpinResult
 } from '../types/roulette'
 import type {
@@ -40,6 +41,7 @@ interface InterceptedNetworkPayload {
 type UnknownRecord = Record<string, unknown>
 type StakeAction = 'bet' | 'roll' | 'next' | 'cashout'
 type Bet88Action = 'bet' | 'play'
+type CapturedRouletteMessage = EvoMessage | PragmaticPlayMessage
 
 let tennisSyncTimer: number | null = null
 let lastTennisSignature = ''
@@ -243,6 +245,22 @@ function isEvoMessage(value: unknown): value is EvoMessage {
   )
 }
 
+function isPragmaticPlayMessage(value: unknown): value is PragmaticPlayMessage {
+  return (
+    isRecord(value) &&
+    isRecord(value.gameresult) &&
+    typeof value.gameresult.score === 'string' &&
+    typeof value.gameresult.pre === 'string' &&
+    typeof value.gameresult.megaWin === 'string' &&
+    typeof value.gameresult.color === 'string' &&
+    typeof value.gameresult.luckyWin === 'string' &&
+    typeof value.gameresult.id === 'string' &&
+    typeof value.gameresult.time === 'string' &&
+    typeof value.gameresult.seq === 'number' &&
+    typeof value.gameresult.value === 'string'
+  )
+}
+
 function getNumberArray(value: unknown): number[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
@@ -388,11 +406,13 @@ function extractBet88Payload(payload: InterceptedNetworkPayload): Bet88<unknown>
   return null
 }
 
-function extractRoulettePayload(payload: InterceptedNetworkPayload): EvoMessage | null {
+function extractRoulettePayload(payload: InterceptedNetworkPayload): CapturedRouletteMessage | null {
   const candidates = [payload.data]
 
   for (const candidate of candidates) {
-    const match = findMatchingRecord(candidate, isEvoMessage)
+    const match = findMatchingRecord(candidate, (entry): entry is CapturedRouletteMessage => {
+      return isEvoMessage(entry) || isPragmaticPlayMessage(entry)
+    })
     if (match) {
       return match
     }
@@ -701,8 +721,34 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
   }
 }
 
-function parseRouletteWinningNumber(providerData: EvoMessage): number | null {
-  const winningNumber = toNumber(providerData.args.result[0]?.number ?? providerData.args.code)
+function parseBooleanFlag(value: string): boolean {
+  return value.trim().toLowerCase() === 'true'
+}
+
+function parseClockTimestamp(value: string, referenceTimestamp: number): number | null {
+  const match = value.match(/^(\d{1,2}):(\d{2}):(\d{2})$/)
+  if (!match) {
+    return null
+  }
+
+  const [, hoursText, minutesText, secondsText] = match
+  const date = new Date(referenceTimestamp)
+  date.setHours(Number(hoursText), Number(minutesText), Number(secondsText), 0)
+
+  const forwardDiff = date.getTime() - referenceTimestamp
+  if (forwardDiff > 12 * 60 * 60 * 1000) {
+    date.setDate(date.getDate() - 1)
+  } else if (forwardDiff < -12 * 60 * 60 * 1000) {
+    date.setDate(date.getDate() + 1)
+  }
+
+  return date.getTime()
+}
+
+function parseRouletteWinningNumber(providerData: CapturedRouletteMessage): number | null {
+  const winningNumber = isEvoMessage(providerData)
+    ? toNumber(providerData.args.result[0]?.number ?? providerData.args.code)
+    : toNumber(providerData.gameresult.score)
 
   if (winningNumber === undefined || !Number.isInteger(winningNumber) || winningNumber < 0 || winningNumber > 36) {
     return null
@@ -717,9 +763,39 @@ function parseRouletteResult(payload: InterceptedNetworkPayload): RouletteSpinRe
     return null
   }
 
+  if (isPragmaticPlayMessage(providerData) && parseBooleanFlag(providerData.gameresult.pre)) {
+    return null
+  }
+
   const winningNumber = parseRouletteWinningNumber(providerData)
   if (winningNumber === null) {
     return null
+  }
+
+  if (isPragmaticPlayMessage(providerData)) {
+    const referenceTimestamp = payload.timestamp ?? Date.now()
+    const timestamp = parseClockTimestamp(providerData.gameresult.time, referenceTimestamp) ?? referenceTimestamp
+
+    return {
+      id: providerData.gameresult.id,
+      provider: 'bet88',
+      source: 'pragmatic-play',
+      game: 'roulette',
+      eventType: 'gameresult',
+      score: providerData.gameresult.score,
+      color: providerData.gameresult.color,
+      sequence: providerData.gameresult.seq,
+      rawValue: providerData.gameresult.value,
+      isPreResult: parseBooleanFlag(providerData.gameresult.pre),
+      isMegaWin: parseBooleanFlag(providerData.gameresult.megaWin),
+      isLuckyWin: parseBooleanFlag(providerData.gameresult.luckyWin),
+      description:
+        providerData.gameresult.value.trim() || `${providerData.gameresult.score} ${providerData.gameresult.color}`,
+      winningNumber,
+      timestamp,
+      updatedAt: new Date(timestamp).toISOString(),
+      url: window.location.href
+    }
   }
 
   const resultNumbers = providerData.args.result
@@ -811,7 +887,9 @@ function findExistingResultIndex(results: GameResult[], candidate: GameResult): 
 }
 
 function findExistingRouletteResultIndex(results: RouletteSpinResult[], candidate: RouletteSpinResult): number {
-  return results.findIndex((entry) => entry.id === candidate.id)
+  return results.findIndex(
+    (entry) => entry.id === candidate.id && entry.provider === candidate.provider && entry.source === candidate.source
+  )
 }
 
 async function saveGameResult(result: GameResult): Promise<void> {

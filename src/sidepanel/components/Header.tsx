@@ -41,8 +41,8 @@ export const MainHeader = ({ status, stats, latestGame, onGameClassChange, gameC
   const currentGameClassLabel = GAME_CLASS_OPTIONS.find((option) => option.value === gameClass)?.label ?? gameClass
 
   return (
-    <header className='relative overflow-hidden rounded-t-[14.01px] rounded-b-[14.01px] border-[0.5px] border-[#09111f]/80 bg-[#09111f] text-white shadow-[0_32px_90px_-38px_rgba(15,23,42,0.78)]'>
-      <div className='absolute inset-x-[-15%] top-[-24%] h-48 rounded-full bg-[radial-gradient(circle,rgba(56,189,248,0.44),transparent_66%)] blur-2xl' />
+    <header className='relative overflow-hidden rounded-t-[14.01px] rounded-b-[14.01px] border-[0.5px] border-[#1f2020]/80 bg-[#1f2020] text-white shadow-[0_32px_90px_-38px_rgba(31,32,32,0.32)]'>
+      <div className='absolute inset-x-[-15%] top-[-24%] h-48 rounded-full bg-[radial-gradient(circle,rgba(200, 204, 207,0.44),transparent_66%)] blur-2xl' />
       <div className='absolute bottom-[-28%] right-[-16%] h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.28),transparent_70%)] blur-2xl' />
       <div className='relative space-y-4 p-4'>
         <div className='flex items-start justify-between gap-2'>
@@ -59,7 +59,6 @@ export const MainHeader = ({ status, stats, latestGame, onGameClassChange, gameC
               />
             </div>
             <div>
-              <p className='text-[7px] uppercase tracking-[0.34em] text-cyan-100/80 font-line'>Session Observatory</p>
               <h1 className='font-circ mt-1 text-lg font-bold leading-4 drop-shadow-px drop-shadow-black text-white!'>
                 Watchful Wind
               </h1>

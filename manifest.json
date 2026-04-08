@@ -17,7 +17,8 @@
         "*://*.evo-games.com/*",
         "*://*.evolution.com/*",
         "*://*.evolutiongaming.com/*",
-        "*://*.ezugi.com/*"
+        "*://*.ezugi.com/*",
+        "*://*.pragmaticplaylive.net/*"
       ],
       "js": ["dist/content.js"],
       "run_at": "document_start",

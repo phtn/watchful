@@ -12,13 +12,13 @@ interface RouletteWorkspaceProps {
 }
 
 export function RouletteWorkspace({ status, stats, onReset }: RouletteWorkspaceProps) {
-  const recentSpins = stats.results.slice(-18).reverse()
+  const recentSpins = stats.results.slice(-26).reverse()
   const previewSpins = recentSpins.length > 0 ? recentSpins.map((result) => result.winningNumber) : SAMPLE_SPIN_TAPE
   const latestSpin = recentSpins[0] ?? null
   const winningNumbers = stats.results.map((result) => result.winningNumber)
 
   return (
-    <div className='space-y-2 pb-6'>
+    <div className='space-y-2 pb-6 bg-[#282828]'>
       <RouletteHeader stats={stats} latestSpin={latestSpin} previewSpins={previewSpins} />
       <RouletteVirtualBoard status={status} winningNumbers={winningNumbers} />
       <Analytics winningNumbers={winningNumbers} onReset={onReset} />

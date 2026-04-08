@@ -10,7 +10,7 @@ interface RouletteHeaderProps {
 
 export const RouletteHeader = ({ stats, latestSpin, previewSpins }: RouletteHeaderProps) => {
   return (
-    <section className='relative overflow-hidden rounded-[18px] border border-white/12 bg-[#09111f] p-5 text-white shadow-[0_32px_90px_-38px_rgba(15,23,42,0.78)]'>
+    <section className='relative overflow-hidden rounded-[18px] border border-white/12 bg-[#1F2020] p-5 text-white'>
       <div className='absolute bottom-[-35%] right-[-16%] h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(239,68,68,0.28),transparent_68%)] blur-2xl' />
       <div className='relative'>
         <div className='flex items-start justify-between gap-4'>
@@ -27,10 +27,10 @@ export const RouletteHeader = ({ stats, latestSpin, previewSpins }: RouletteHead
           </div>
         </div>
         <div className='mt-4 rounded-lg p-3 w-full'>
-          <div className='flex items-end justify-between gap-3'>
+          {/*<div className='flex items-end justify-between gap-3'>
             <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Recent spins</p>
             <p className='text-xs text-slate-500'>{latestSpin ? latestSpin.description : 'Listening for spins'}</p>
-          </div>
+          </div>*/}
           <div className='mt-3 flex flex-wrap gap-2 w-full'>
             {previewSpins.map((value, index) => (
               <div

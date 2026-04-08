@@ -3,7 +3,7 @@ import { BLACK_NUMBERS, ORPHELINS_G, RED_NUMBERS, TIER_G, VOISINS_G } from '../.
 import { cn } from '../../lib/utils'
 import { ClassName } from '../../types'
 
-export const cardClassName: ClassName = `border-zinc-800  bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]`
+export const cardClassName: ClassName = `border-zinc-800  bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]`
 
 type AnalyticsProps = {
   winningNumbers?: readonly number[]
@@ -92,7 +92,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
     // Hot and Cold numbers
     const sortedNumbers = Array.from(numberCounts.entries()).sort((a, b) => b[1] - a[1])
 
-    const hotNumbers = sortedNumbers.slice(0, 5).filter(([, count]) => count > 0)
+    const hotNumbers = sortedNumbers.slice(0, 8).filter(([, count]) => count > 0)
     const coldNumbers = sortedNumbers
       .slice(-5)
       .reverse()
@@ -127,33 +127,27 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
     <div className='space-y-2 text-white p-1'>
       <div className='mx-auto space-y-2'>
         {/* Hot & Cold Numbers */}
-        <div className='grid lg:grid-cols-2 gap-1'>
-          <div className={cn('rounded-lg p-4', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Flame size={20} className='text-orange-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Hot</h2>
-              <span className='text-xs text-neutral-500 ml-auto'>Most frequent</span>
-            </div>
+        <div className={cn('grid lg:grid-cols-2 gap-1', cardClassName)}>
+          <div className={cn('rounded-lg p-4')}>
             <div className='flex flex-wrap gap-3'>
+              <div className='-rotate-90 p-0.5 rounded-sm text-orange-300 text-xs h-4'>
+                <span className='font-bold uppercase'>hot</span>
+              </div>
               {stats.hotNumbers.length > 0 ? (
                 stats.hotNumbers.map(([num, count]) => (
                   <NumberBadge key={num} number={num} count={count} isHot={true} />
                 ))
               ) : (
-                <p className='text-neutral-500 text-sm'>No data yet</p>
+                <p className='text-neutral-500 text-sm'>Awaiting data...</p>
               )}
             </div>
           </div>
 
-          <div className={cn('rounded-lg p-4', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Snowflake size={20} className='text-cyan-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Cold</h2>
-              <span className='text-xs text-neutral-500 ml-auto'>Least frequent</span>
-            </div>
+          <div className={cn('rounded-lg p-4')}>
             <div className='flex flex-wrap gap-3'>
+              <div className='-rotate-90 p-0.5 rounded-sm text-cyan-400 text-xs h-4'>
+                <span className='font-bold uppercase'>cold</span>
+              </div>
               {stats.coldNumbers.length > 0 ? (
                 stats.coldNumbers.map(([num, count]) => (
                   <NumberBadge key={num} number={num} count={count} isHot={false} />
@@ -165,169 +159,62 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           </div>
         </div>
         {/* Recent Numbers Strip */}
-
-        {/* Stats Overview */}
-        <div className='grid grid-cols-2 md:grid-cols-4 gap-1'>
-          <StatCard title='Total Spins' value={winningNumbers.length} color='emerald' />
-          <StatCard
-            title='Zero %'
-            value={`${stats.zero.pct.toFixed(1)}%`}
-            subtitle={`${stats.zero.count} hits`}
-            color='emerald'
+        <div className='grid grid-cols-10 gap-1'>
+          <VPctBar
+            label='ZERO'
+            percentage={stats.zero.pct}
+            color='bg-linear-to-b from-emerald-500 to-emerald-600'
+            count={stats.zero.count}
           />
-          <StatCard
-            title='Red %'
-            value={`${stats.colors.red.pct.toFixed(1)}%`}
-            subtitle={`${stats.colors.red.count} hits`}
-            color='rose'
+          <VPctBar
+            label='1st (1-12)'
+            percentage={stats.dozens[0].pct}
+            color='bg-linear-to-b from-violet-300/50 to-purple-300'
+            count={stats.dozens[0].count}
+            cols='col-span-3'
           />
-          <StatCard
-            title='Black %'
-            value={`${stats.colors.black.pct.toFixed(1)}%`}
-            subtitle={`${stats.colors.black.count} hits`}
-            color='neutral'
+          <VPctBar
+            label='2nd (13-24)'
+            percentage={stats.dozens[1].pct}
+            color='bg-linear-to-b from-purple-300/50 to-fuchsia-300'
+            count={stats.dozens[1].count}
+            cols='col-span-3'
+          />
+          <VPctBar
+            label='3rd (25-36)'
+            percentage={stats.dozens[2].pct}
+            color='bg-linear-to-b from-fuchsia-300/50 to-pink-300'
+            count={stats.dozens[2].count}
+            cols='col-span-3'
           />
         </div>
 
-        {/* Main Stats Grid */}
-        <div className='grid lg:grid-cols-2 gap-1'>
-          {/* Dozens & Columns */}
-          <div className={cn('rounded-lg p-2', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Grid3X3 size={20} className='text-purple-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              {/*<h2 className='text-lg font-semibold text-white'>Dozens</h2>*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Dozens</h2>
-            </div>
-            <div className='space-y-4'>
-              <PercentageBar
-                label='1st Dozen (1-12)'
-                percentage={stats.dozens[0].pct}
-                color='bg-linear-to-r from-violet-500 to-purple-500'
-                count={stats.dozens[0].count}
-              />
-              <PercentageBar
-                label='2nd Dozen (13-24)'
-                percentage={stats.dozens[1].pct}
-                color='bg-linear-to-r from-purple-500 to-fuchsia-500'
-                count={stats.dozens[1].count}
-              />
-              <PercentageBar
-                label='3rd Dozen (25-36)'
-                percentage={stats.dozens[2].pct}
-                color='bg-linear-to-r from-fuchsia-500 to-pink-500'
-                count={stats.dozens[2].count}
-              />
-            </div>
-          </div>
-
-          <div className={cn('rounded-lg p-2', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Layers size={20} className='text-blue-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Columns</h2>
-            </div>
-            <div className='space-y-4'>
-              <PercentageBar
-                label='1st Column (1,4,7...)'
-                percentage={stats.columns[0].pct}
-                color='bg-linear-to-r from-blue-500 to-cyan-500'
-                count={stats.columns[0].count}
-              />
-              <PercentageBar
-                label='2nd Column (2,5,8...)'
-                percentage={stats.columns[1].pct}
-                color='bg-linear-to-r from-cyan-500 to-teal-500'
-                count={stats.columns[1].count}
-              />
-              <PercentageBar
-                label='3rd Column (3,6,9...)'
-                percentage={stats.columns[2].pct}
-                color='bg-linear-to-r from-teal-500 to-emerald-500'
-                count={stats.columns[2].count}
-              />
-            </div>
-          </div>
-
-          <div className={cn('rounded-lg p-2', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<BarChart3 size={20} className='text-amber-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Halves</h2>
-            </div>
-            <div className='space-y-4'>
-              <PercentageBar
-                label='Low (1-18)'
-                percentage={stats.halves[0].pct}
-                color='bg-linear-to-r from-amber-500 to-orange-500'
-                count={stats.halves[0].count}
-              />
-              <PercentageBar
-                label='High (19-36)'
-                percentage={stats.halves[1].pct}
-                color='bg-linear-to-r from-orange-500 to-red-500'
-                count={stats.halves[1].count}
-              />
-            </div>
-            <div className='mt-6 pt-6 border-t border-neutral-700/50 space-y-4'>
-              <PercentageBar
-                label='Odd'
-                percentage={stats.oddEven.odd.pct}
-                color='bg-linear-to-r from-indigo-500 to-blue-500'
-                count={stats.oddEven.odd.count}
-              />
-              <PercentageBar
-                label='Even'
-                percentage={stats.oddEven.even.pct}
-                color='bg-linear-to-r from-blue-500 to-indigo-500'
-                count={stats.oddEven.even.count}
-              />
-            </div>
-          </div>
-
-          <div className={cn('rounded-lg p-2', cardClassName)}>
-            <div className='flex items-center gap-2 mb-6'>
-              {/*<Target size={20} className='text-emerald-400' />*/}
-              {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-              <h2 className='font-clash font-semibold text-white uppercase'>Wheel</h2>
-            </div>
-            <div className='space-y-4'>
-              <PercentageBar
-                label='Voisins du Zéro'
-                percentage={stats.sections.voisins.pct}
-                color='bg-linear-to-r from-emerald-500 to-teal-500'
-                count={stats.sections.voisins.count}
-              />
-              <PercentageBar
-                label='Tiers du Cylindre'
-                percentage={stats.sections.tier.pct}
-                color='bg-linear-to-r from-rose-500 to-pink-500'
-                count={stats.sections.tier.count}
-              />
-              <PercentageBar
-                label='Orphelins'
-                percentage={stats.sections.orphelins.pct}
-                color='bg-linear-to-r from-amber-500 to-yellow-500'
-                count={stats.sections.orphelins.count}
-              />
-            </div>
-            <div className='mt-6 pt-4 border-t border-neutral-700/50'>
-              <div className='grid grid-cols-3 gap-4 text-xs'>
-                <div>
-                  <p className='text-neutral-400 mb-1'>Voisins</p>
-                  <p className='text-neutral-500 leading-relaxed'>0,2,3,4,7,12,15,18,19,21,22,25,26,28,29,32,35</p>
-                </div>
-                <div>
-                  <p className='text-neutral-400 mb-1'>Tiers</p>
-                  <p className='text-neutral-500 leading-relaxed'>5,8,10,11,13,16,23,24,27,30,33,36</p>
-                </div>
-                <div>
-                  <p className='text-neutral-400 mb-1'>Orphelins</p>
-                  <p className='text-neutral-500 leading-relaxed'>1,6,9,14,17,20,31,34</p>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Stats Overview */}
+        <div className='grid grid-cols-4 gap-1'>
+          <StatCard
+            title='EVEN'
+            value={`${stats.oddEven.even.pct.toFixed(1)}%`}
+            subtitle={`${stats.oddEven.even.count}`}
+            color='neutral'
+          />
+          <StatCard
+            title='RED'
+            value={`${stats.colors.red.pct.toFixed(1)}%`}
+            subtitle={`${stats.colors.red.count}`}
+            color='rose'
+          />
+          <StatCard
+            title='BLACK'
+            value={`${stats.colors.black.pct.toFixed(1)}%`}
+            subtitle={`${stats.colors.black.count}`}
+            color='neutral'
+          />
+          <StatCard
+            title='ODD'
+            value={`${stats.oddEven.odd.pct.toFixed(1)}%`}
+            subtitle={`${stats.oddEven.odd.count}`}
+            color='neutral'
+          />
         </div>
 
         <div className={cn('rounded-lg p-4', cardClassName)}>
@@ -496,6 +383,24 @@ const PercentageBar: FC<PercentageBarProps> = ({ label, percentage, color, count
     </div>
   </div>
 )
+const VPctBar: FC<PercentageBarProps & { cols?: string }> = ({ label, percentage, color, count, cols }) => (
+  <div className={cn('group', cols)}>
+    <div className={cn('relative h-16 bg-neutral-700/50 rounded-sm overflow-hidden flex items-end')}>
+      <div
+        className={`w-full ${color} rounded-sm transition-all duration-700 ease-out group-hover:shadow-lg`}
+        style={{ height: `${Math.min(percentage, 100) + 0.33}%` }}
+      />
+
+      <span className='absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 text-sm font-semibold text-neutral-200'>
+        {percentage.toFixed(1)}%
+      </span>
+    </div>
+    <div className='flex items-center justify-center space-x-2 mt-1.5'>
+      <span className='text-xs text-neutral-300'>{label}</span>
+      <span className='text-xs text-neutral-500'>{count}</span>
+    </div>
+  </div>
+)
 
 interface NumberBadgeProps {
   number: number
@@ -514,12 +419,12 @@ const NumberBadge: FC<NumberBadgeProps> = ({ number, count, isHot = true, showCo
   return (
     <div className='relative group'>
       <div
-        className={`w-12 h-12 ${getColor(number)} rounded-xl flex items-center justify-center font-bold text-white shadow-lg transition-all duration-300 hover:scale-110 hover:shadow-xl ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
-        {number}
+        className={`w-9 h-8 ${getColor(number)} rounded-xl flex items-center justify-center font-bold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
+        <span className='font-bold text-base'>{number}</span>
       </div>
       {showCount && (
         <div
-          className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${isHot ? 'bg-orange-500' : 'bg-cyan-500'}`}>
+          className={`absolute -top-px -right-px w-3 h-3 rounded-sm flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
           {count}
         </div>
       )}

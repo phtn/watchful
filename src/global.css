@@ -53,7 +53,7 @@
 }
 
 :root {
-  --panel-bg: #eff4fb;
+  --panel-bg: #282828;
   --panel-ink: #102033;
   --panel-muted: #5a6a7d;
   --font-display: 'Geist Pixel Square', 'Geist Sans', 'Segoe UI', sans-serif;
@@ -118,7 +118,7 @@ body::after {
   height: 16rem;
   width: 16rem;
   border-radius: 9999px;
-  background: rgba(251, 191, 36, 0.16);
+  background-color: #282828;
 }
 
 #root {

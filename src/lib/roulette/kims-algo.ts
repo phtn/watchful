@@ -295,7 +295,10 @@ function summarizeKimWinStreaks(steps: readonly KimAlgoStep[]): KimAlgoSimulatio
 
   for (const step of steps) {
     if (step.hitType === 'miss') {
-      currentWinStreak = 0
+      // Only reset streak when the full sequence is exhausted or zero hit without a hedge
+      if (step.sessionOutcome === 'reset_after_max_loss') {
+        currentWinStreak = 0
+      }
       continue
     }
 
@@ -316,10 +319,11 @@ export function selectKimQuadrant(
   options: {
     currentQuadrant?: KimQuadrantId
     usedQuadrants?: readonly KimQuadrantId[]
+    hotNumbers?: readonly number[]
   } = {}
 ): KimAlgoSelection {
   const candidateQuadrants = getKimQuadrantsContainingNumber(number)
-  const { currentQuadrant, usedQuadrants = [] } = options
+  const { currentQuadrant, usedQuadrants = [], hotNumbers = [] } = options
 
   if (candidateQuadrants.length === 0) {
     return {
@@ -330,24 +334,49 @@ export function selectKimQuadrant(
   }
 
   const usedQuadrantSet = new Set(usedQuadrants)
+  const hotNumberRanks = new Map(hotNumbers.map((value, index) => [value, index]))
   const currentIndex = currentQuadrant ? getQuadrantIndex(currentQuadrant) : null
+
   const selectedQuadrant = [...candidateQuadrants].sort((left, right) => {
+    // 1. Prefer quadrant not already in the active sequence
     const leftIsUsed = usedQuadrantSet.has(left)
     const rightIsUsed = usedQuadrantSet.has(right)
-
     if (leftIsUsed !== rightIsUsed) {
       return leftIsUsed ? 1 : -1
     }
 
+    // 2. Prefer quadrant with more hot numbers
+    const leftNumbers = KIMS_ALGO_QUADRANTS[left]
+    const rightNumbers = KIMS_ALGO_QUADRANTS[right]
+    const leftHotCount = leftNumbers.filter((value) => hotNumberRanks.has(value)).length
+    const rightHotCount = rightNumbers.filter((value) => hotNumberRanks.has(value)).length
+    if (leftHotCount !== rightHotCount) {
+      return rightHotCount - leftHotCount
+    }
+
+    // 3. Prefer quadrant with higher cumulative hot rank score (lower rank index = hotter)
+    const leftHotScore = leftNumbers.reduce((score, value) => {
+      const rank = hotNumberRanks.get(value)
+      return score + (rank === undefined ? 0 : hotNumbers.length - rank)
+    }, 0)
+    const rightHotScore = rightNumbers.reduce((score, value) => {
+      const rank = hotNumberRanks.get(value)
+      return score + (rank === undefined ? 0 : hotNumbers.length - rank)
+    }, 0)
+    if (leftHotScore !== rightHotScore) {
+      return rightHotScore - leftHotScore
+    }
+
+    // 4. Prefer quadrant closest to the current quadrant by index
     if (currentIndex !== null) {
       const distanceToLeft = Math.abs(getQuadrantIndex(left) - currentIndex)
       const distanceToRight = Math.abs(getQuadrantIndex(right) - currentIndex)
-
       if (distanceToLeft !== distanceToRight) {
         return distanceToLeft - distanceToRight
       }
     }
 
+    // 5. Lower quadrant id as final tiebreaker
     return getQuadrantIndex(left) - getQuadrantIndex(right)
   })[0]
 
@@ -438,7 +467,8 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
     const hit = hitQuadrant || hitZero
     const selection = selectKimQuadrant(landedNumber, {
       currentQuadrant: activeQuadrant,
-      usedQuadrants: activeQuadrants
+      usedQuadrants: activeQuadrants,
+      hotNumbers: resolvedOptions.hotNumbers
     })
 
     let sessionOutcome: KimAlgoStep['sessionOutcome'] = 'continue'
@@ -446,12 +476,15 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
     let nextQuadrant = activeQuadrant
     let nextQuadrants = [...activeQuadrants]
 
+    // Zero on rounds 1–3 (no zero hedge) is an immediate loss — don't escalate
+    const zeroOnUnhedgedRound = landedNumber === 0 && bet.zeroStake === 0
+
     if (hit) {
       sessionOutcome = 'reset_after_win'
       nextRound = 1
       nextQuadrant = selection.selectedQuadrant ?? activeQuadrant
       nextQuadrants = [nextQuadrant]
-    } else if (activeRound === KIMS_ALGO_MAX_ROUNDS) {
+    } else if (activeRound === KIMS_ALGO_MAX_ROUNDS || zeroOnUnhedgedRound) {
       sessionOutcome = 'reset_after_max_loss'
       nextRound = 1
       nextQuadrant = selection.selectedQuadrant ?? activeQuadrant
