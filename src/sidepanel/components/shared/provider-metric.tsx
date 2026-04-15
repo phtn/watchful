@@ -1,4 +1,4 @@
-import type { ResultSummary } from '../../types'
+import type { ResultSummary } from '../../../types'
 
 interface ProviderMetricProps {
   label: string

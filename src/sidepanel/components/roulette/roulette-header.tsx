@@ -1,6 +1,6 @@
-import { getNumberTone } from '../../lib/roulette/utils'
-import { cn } from '../../lib/utils'
-import { RouletteSpinResult, RouletteStoredData } from '../../types/roulette'
+import { getNumberTone } from '../../../lib/roulette/utils'
+import { cn } from '../../../lib/utils'
+import { RouletteSpinResult, RouletteStoredData } from '../../../types/roulette'
 
 interface RouletteHeaderProps {
   stats: RouletteStoredData

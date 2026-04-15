@@ -1,7 +1,7 @@
-import { cn } from '../../lib/utils'
-import { GameResult } from '../../types'
-import { formatAmount, formatGameLabel, formatSignedAmount } from '../lib/formatters'
-import { HeroMetric } from './HeroMetric'
+import { cn } from '../../../lib/utils'
+import { GameResult } from '../../../types'
+import { formatAmount, formatGameLabel, formatSignedAmount } from '../../lib/formatters'
+import { HeroMetric } from './hero-metric'
 
 interface PulseProps {
   simulated: boolean

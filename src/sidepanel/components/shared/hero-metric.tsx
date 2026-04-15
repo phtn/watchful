@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ClassName } from '../../types'
+import { ClassName } from '../../../types'
 
 export interface Metric {
   label: string

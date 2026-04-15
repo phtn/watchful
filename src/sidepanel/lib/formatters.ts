@@ -50,30 +50,30 @@ export function formatDateTime(timestamp: number): string {
 export function getSiteBadgeClass(site?: SupportedSiteKey): string {
   switch (site) {
     case 'stake':
-      return 'border-emerald-200/90 bg-emerald-50 text-emerald-700'
+      return 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
     case 'bet88':
-      return 'border-sky-200/90 bg-sky-50 text-sky-700'
+      return 'border-sky-300/20 bg-sky-300/10 text-sky-100'
     default:
-      return 'border-slate-200/90 bg-slate-100 text-slate-600'
+      return 'border-white/10 bg-white/6 text-slate-300'
   }
 }
 
 export function getResultClass(result: GameOutcome): string {
   return result === 'win'
-    ? 'border-emerald-300/80 bg-emerald-50 text-emerald-700'
-    : 'border-rose-300/80 bg-rose-50 text-rose-700'
+    ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
+    : 'border-rose-300/20 bg-rose-300/10 text-rose-100'
 }
 
 export function getNetTone(value: number): string {
   if (value > 0) {
-    return 'text-emerald-600'
+    return 'text-emerald-300'
   }
 
   if (value < 0) {
-    return 'text-rose-600'
+    return 'text-rose-300'
   }
 
-  return 'text-slate-600'
+  return 'text-slate-300'
 }
 
 export function formatScalar(value: number | string): string {

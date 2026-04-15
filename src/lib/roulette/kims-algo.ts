@@ -84,7 +84,7 @@ export const KIMS_ALGO_ASSUMPTIONS = [
   'The YAML is treated as authoritative for all quadrant definitions, including q5 = [13, 14, 17, 16].',
   'The round ladder counts straight-up number placements, not unique board coverage: round 1 places 4 numbers, round 2 places 8, round 3 places 12, round 4 places 16 plus zero, and round 5 places 20 plus zero.',
   'Per-number stake progression is interpreted as [1x, 1x, 2x, 4x, 8x].',
-  'Overlap mode defaults to off. When a new quadrant would overlap an existing paired quadrant, the overlapping half is replaced by hot-prioritized local spread picks.',
+  'Overlap mode defaults to off. When a new quadrant would overlap existing placements, the overlapping slots are replaced by hot-prioritized local spread picks.',
   'Idle auto-start uses the latest two logged numbers when they share a quadrant; shared top-vs-bottom ties are broken by hot-number density, then hot rank, then current quadrant.',
   'Zero is hedged on rounds 4 and 5 with the same per-number stake used on the quadrant.',
   'After each miss, the next quadrant is chosen from the landed number and added to the active sequence before the next round begins.',
@@ -242,15 +242,17 @@ function resolveQuadrantPlacements(
   const placedSet = new Set(placedNumbers)
   const uniqueNumbers = baseNumbers.filter((value) => !placedSet.has(value))
   const hotNumberRanks = new Map(hotNumbers.map((value, index) => [value, index]))
+  const missingCount = baseNumbers.length - uniqueNumbers.length
+  const spreadApplied = missingCount > 0
 
-  if (uniqueNumbers.length !== 2) {
+  if (missingCount <= 0) {
     return {
       numbers: baseNumbers,
       spreadApplied: false
     }
   }
 
-  const spreadPair = getAdjacentSpreadQuadrants(quadrant, spreadSelectionMode)
+  const spreadNumbers = getAdjacentSpreadQuadrants(quadrant, spreadSelectionMode)
     .flatMap((candidateQuadrant) => getQuadrantUniquePair(candidateQuadrant))
     .filter((value) => !placedSet.has(value) && !uniqueNumbers.includes(value))
     .sort((left, right) => {
@@ -269,18 +271,18 @@ function resolveQuadrantPlacements(
 
       return right - left
     })
-    .slice(0, 2)
+    .slice(0, missingCount)
 
-  if (spreadPair.length < 2) {
+  if (spreadNumbers.length === 0) {
     return {
-      numbers: baseNumbers,
-      spreadApplied: false
+      numbers: uniqueNumbers,
+      spreadApplied
     }
   }
 
   return {
-    numbers: [...uniqueNumbers, ...spreadPair],
-    spreadApplied: true
+    numbers: [...uniqueNumbers, ...spreadNumbers],
+    spreadApplied
   }
 }
 
@@ -385,6 +387,25 @@ export function selectKimQuadrant(
     candidateQuadrants,
     selectedQuadrant
   }
+}
+
+export function getKimAlgoGrossReturn(
+  bet: Pick<KimAlgoBetPlan, 'numbers' | 'unitStake' | 'zeroStake'>,
+  landedNumber: number
+): number {
+  if (landedNumber === 0) {
+    return bet.zeroStake > 0 ? 36 * bet.zeroStake : 0
+  }
+
+  const placementCount = bet.numbers.reduce((count, value) => count + (value === landedNumber ? 1 : 0), 0)
+  return placementCount > 0 ? 36 * bet.unitStake * placementCount : 0
+}
+
+export function getKimAlgoNetProfit(
+  bet: Pick<KimAlgoBetPlan, 'numbers' | 'unitStake' | 'zeroStake' | 'totalStake'>,
+  landedNumber: number
+): number {
+  return getKimAlgoGrossReturn(bet, landedNumber) - bet.totalStake
 }
 
 export function createKimAlgoBetPlan(

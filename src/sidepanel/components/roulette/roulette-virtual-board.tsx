@@ -3,6 +3,7 @@ import {
   BOARD_ROWS,
   KIMS_ALGO_QUADRANTS,
   createKimAlgoBetPlan,
+  getKimAlgoNetProfit,
   getKimQuadrantsContainingNumber,
   getKimQuadrantsContainingPair,
   resolveKimAutoStartingQuadrant,
@@ -10,11 +11,11 @@ import {
   simulateKimsAlgo,
   type KimQuadrantId,
   type KimSpreadSelectionMode
-} from '../../lib/roulette'
-import { getNumberTone } from '../../lib/roulette/utils'
-import { cn } from '../../lib/utils'
-import type { PanelStatus } from '../../types'
-import { cardClassName } from './RouletteAnalytics'
+} from '../../../lib/roulette'
+import { getNumberTone } from '../../../lib/roulette/utils'
+import { cn } from '../../../lib/utils'
+import type { PanelStatus } from '../../../types'
+import { cardClassName } from './roulette-analytics'
 
 interface RouletteVirtualBoardProps {
   status: PanelStatus
@@ -135,30 +136,40 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
     }
   }, [autoStartingQuadrant, isTracking, startingQuadrant])
 
-  const simulation = simulateKimsAlgo(trackedWinningNumbers, {
-    startingQuadrant,
-    baseUnit,
-    allowOverlaps,
-    spreadSelectionMode,
-    hotNumbers
-  })
-  const latestStep = simulation.steps[simulation.steps.length - 1] ?? null
-  const nextBet = createKimAlgoBetPlan(simulation.finalState.nextRound, simulation.finalState.nextQuadrants, baseUnit, {
-    allowOverlaps,
-    spreadSelectionMode,
-    hotNumbers
-  })
-  const roundMultiplier = getEffectiveStakeMultiplier(nextBet.unitStake, baseUnit, 1)
-  const placementMap = getPlacementMap(nextBet.numbers)
-  const latestWinningNumber = trackedWinningNumbers[trackedWinningNumbers.length - 1] ?? null
-  const hitCount = simulation.steps.filter((step) => step.hit).length
-  const lastResetIndex = simulation.steps.reduce(
-    (last, step, idx) => (step.sessionOutcome !== 'continue' ? idx : last),
-    -1
+  const simulation = useMemo(
+    () =>
+      simulateKimsAlgo(trackedWinningNumbers, {
+        startingQuadrant,
+        baseUnit,
+        allowOverlaps,
+        spreadSelectionMode,
+        hotNumbers
+      }),
+    [allowOverlaps, baseUnit, hotNumbers, spreadSelectionMode, startingQuadrant, trackedWinningNumbers]
   )
-  const totalStaked =
-    simulation.steps.slice(lastResetIndex + 1).reduce((sum, step) => sum + step.bet.totalStake, 0) + nextBet.totalStake
-  const recentSteps = simulation.steps.slice(-6).reverse()
+  const nextBet = useMemo(
+    () =>
+      createKimAlgoBetPlan(simulation.finalState.nextRound, simulation.finalState.nextQuadrants, baseUnit, {
+        allowOverlaps,
+        spreadSelectionMode,
+        hotNumbers
+      }),
+    [allowOverlaps, baseUnit, hotNumbers, simulation, spreadSelectionMode]
+  )
+  const roundMultiplier = getEffectiveStakeMultiplier(nextBet.unitStake, baseUnit, 1)
+  const placementMap = useMemo(() => getPlacementMap(nextBet.numbers), [nextBet])
+  const latestWinningNumber = trackedWinningNumbers[trackedWinningNumbers.length - 1] ?? null
+  const lastResetIndex = useMemo(
+    () => simulation.steps.reduce((last, step, idx) => (step.sessionOutcome !== 'continue' ? idx : last), -1),
+    [simulation]
+  )
+  const totalStaked = useMemo(
+    () =>
+      simulation.steps.slice(lastResetIndex + 1).reduce((sum, step) => sum + step.bet.totalStake, 0) +
+      nextBet.totalStake,
+    [lastResetIndex, nextBet, simulation]
+  )
+  // const recentSteps = simulation.steps.slice(-6).reverse()
   const accPct = lockedBankValue && lockedBankValue > 0 ? (accWinnings / lockedBankValue) * 100 : 0
 
   // Signal: 2 consecutive numbers share a quadrant — only meaningful when not armed
@@ -213,7 +224,7 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
         if (step.sessionOutcome === 'reset_after_max_loss') streakReset = true
       } else {
         streakDelta += 1
-        const profit = 36 * step.bet.unitStake - step.bet.totalStake
+        const profit = getKimAlgoNetProfit(step.bet, step.landedNumber)
         winningsGained += profit
         latestProfit = profit
       }
@@ -252,7 +263,7 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
     setLockedBankValue(baseUnit * 288)
     setIsTracking(true)
   }
-  const winAmount = useMemo(() => 36 * nextBet.unitStake, [nextBet.unitStake])
+  const winAmount = 36 * nextBet.unitStake
   // border border-white/12 bg-[linear-gradient(180deg,rgba(8,15,29,0.96),rgba(11,19,35,0.92))]
   return (
     <section
@@ -275,11 +286,13 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
         <div className='flex flex-col items-end gap-2'>
           <div className='flex flex-wrap justify-end gap-2'>
             {signalFound && !isTracking && (
-              <span className='flex items-center gap-1.5 rounded-md border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-xs font-medium uppercase tracking-wide text-amber-200'>
-                <span className='relative flex h-1.5 w-1.5'>
-                  <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75' />
-                  <span className='relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400' />
+              <span className='relative flex items-center justify-center gap-1.5 rounded-md border border-orange-300/40 bg-orange-300/10 px-2 py-1 text-xs font-medium uppercase tracking-wide text-orange-100'>
+                <span className='relative flex items-center justify-center h-1.5 w-1.5'>
+                  {/*<span className='absolute h-1.5 w-1.5 animate-ping rounded-full text-orange-300'>⏺</span>*/}
+                  <span className='absolute h-1.5 w-1.5 rounded-full bg-orange-400' />
+                  <span className='absolute h-1.5 w-1.5 rounded-full bg-orange-200 animate-ping' />
                 </span>
+                SIGNAL-
                 {signalQuadrants.map((q) => q.toUpperCase()).join('/')}
               </span>
             )}

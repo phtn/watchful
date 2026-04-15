@@ -80,5 +80,8 @@ if (isDev) {
   await ctx.watch()
   console.log('Watching for changes...')
 } else {
-  esbuild.build(esbuildOptions).catch(() => process.exit(1))
+  await esbuild.build(esbuildOptions).catch((error) => {
+    console.error('Build failed:', error.message)
+    process.exit(1)
+  })
 }

@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { ClassName } from '../../types'
+import { ClassName } from '../../../types'
 
 export interface JunctionBoxProps {
   label: string

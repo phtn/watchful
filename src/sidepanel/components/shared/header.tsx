@@ -1,8 +1,8 @@
-import { GameResult, PanelStatus, ResultSummary } from '../../types'
-import { formatTime } from '../lib/formatters'
-import { GameClassView } from './GameClassSwitcher'
-import { HeroMetric } from './HeroMetric'
-import { JunctionBox } from './JunctionBox'
+import { GameResult, PanelStatus, ResultSummary } from '../../../types'
+import { formatTime } from '../../lib/formatters'
+import { GameClassView } from './game-class-switcher'
+import { HeroMetric } from './hero-metric'
+import { JunctionBox } from './junction-box'
 
 interface HeaderProps {
   status: PanelStatus

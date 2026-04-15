@@ -1,7 +1,7 @@
 import { FC, type ReactNode, useMemo } from 'react'
-import { BLACK_NUMBERS, ORPHELINS_G, RED_NUMBERS, TIER_G, VOISINS_G } from '../../lib/roulette'
-import { cn } from '../../lib/utils'
-import { ClassName } from '../../types'
+import { BLACK_NUMBERS, ORPHELINS_G, RED_NUMBERS, TIER_G, VOISINS_G } from '../../../lib/roulette'
+import { cn } from '../../../lib/utils'
+import { ClassName } from '../../../types'
 
 export const cardClassName: ClassName = `border-zinc-800  bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]`
 
