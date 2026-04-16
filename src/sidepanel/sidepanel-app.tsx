@@ -47,6 +47,7 @@ const App = () => {
   const [virtualBankroll, setVirtualBankroll] = useState<VirtualBankrollState>(EMPTY_VIRTUAL_BANKROLL)
   const [rouletteStats, setRouletteStats] = useState<RouletteStoredData>(EMPTY_ROULETTE_STORED_DATA)
   const [tennisStats, setTennisStats] = useState<TennisStoredData>(EMPTY_TENNIS_STORED_DATA)
+  const [evolutionChips, setEvolutionChips] = useState<number[]>([])
   const [activeGameClass, setActiveGameClass] = useState<GameClassView>('originals')
   const [showSettings, setShowSettings] = useState(false)
   const deferredResults = useDeferredValue(stats.results)
@@ -92,6 +93,18 @@ const App = () => {
     })
   }
 
+  const loadEvolutionChips = () => {
+    chrome.storage.local.get(['evolutionChips'], (data) => {
+      const chips = Array.isArray(data.evolutionChips) ? data.evolutionChips.filter((v: unknown) => typeof v === 'number' && v > 0) : []
+      startTransition(() => {
+        setEvolutionChips((prev) => {
+          const next = chips as number[]
+          return prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next
+        })
+      })
+    })
+  }
+
   const persistVirtualBankroll = (nextState: VirtualBankrollState) => {
     chrome.storage.local.set({ virtualBankroll: nextState }, () => {
       startTransition(() => {
@@ -122,6 +135,7 @@ const App = () => {
     loadVirtualBankroll()
     loadRouletteResults()
     loadTennisResults()
+    loadEvolutionChips()
 
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, namespace: string) => {
       if (namespace === 'local' && changes.casinoResults) {
@@ -142,6 +156,10 @@ const App = () => {
 
       if (namespace === 'local' && changes.tennisResults) {
         loadTennisResults()
+      }
+
+      if (namespace === 'local' && changes.evolutionChips) {
+        loadEvolutionChips()
       }
     }
 
@@ -183,6 +201,7 @@ const App = () => {
       loadStats()
       loadRouletteResults()
       loadTennisResults()
+      loadEvolutionChips()
     }, 4000)
 
     return () => {
@@ -446,7 +465,7 @@ const App = () => {
           </>
         ) : activeGameClass === 'roulette' ? (
           <div className='px-2 pt-2'>
-            <RouletteWorkspace status={status} stats={rouletteStats} onReset={clearRouletteResults} />
+            <RouletteWorkspace status={status} stats={rouletteStats} evolutionChips={evolutionChips} onReset={clearRouletteResults} />
           </div>
         ) : (
           <div className='px-2 pt-2'>

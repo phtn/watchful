@@ -392,5 +392,73 @@
     }) as typeof WebSocket
   }
 
+  // Simulate a full mouse click sequence with coordinates
+  function fullClick(el: Element): void {
+    const rect = el.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, view: window }
+
+    el.dispatchEvent(new PointerEvent('pointerdown', { ...opts, pointerId: 1, pointerType: 'mouse' }))
+    el.dispatchEvent(new MouseEvent('mousedown', opts))
+    el.dispatchEvent(new PointerEvent('pointerup', { ...opts, pointerId: 1, pointerType: 'mouse' }))
+    el.dispatchEvent(new MouseEvent('mouseup', opts))
+    el.dispatchEvent(new MouseEvent('click', opts))
+  }
+
+  // Listen for click commands from the content script
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return
+
+    if (event.data?.type === 'EVO_CLICK') {
+      const { selector, requestId } = event.data as { selector: string; requestId: string }
+
+      // Search regular DOM first, then walk shadow roots
+      function deepQuery(root: ParentNode, sel: string): HTMLElement | null {
+        const found = root.querySelector<HTMLElement>(sel)
+        if (found) return found
+        const hosts = root.querySelectorAll('*')
+        for (const host of hosts) {
+          if (host.shadowRoot) {
+            const inner = deepQuery(host.shadowRoot, sel)
+            if (inner) return inner
+          }
+        }
+        return null
+      }
+
+      const el = deepQuery(document, selector)
+      const parent = el?.closest<HTMLElement>('[class*="chipItem"]') ?? el?.parentElement
+      const visible = el ? el.offsetParent !== null || el.offsetWidth > 0 : false
+      const hasShadow = document.querySelector('#root')?.shadowRoot !== null
+      // Also try plain querySelector for comparison
+      const plainEl = document.querySelector<HTMLElement>(selector)
+      const allChips = document.querySelectorAll('[data-role="chip"]')
+      const allDataRole = document.querySelectorAll('[data-role]')
+      console.log('[EVO_CLICK]', selector, {
+        found: !!el,
+        plainFound: !!plainEl,
+        tag: el?.tagName,
+        visible,
+        hasShadow,
+        allChipsCount: allChips.length,
+        allDataRoleCount: allDataRole.length,
+        rootChildren: document.querySelector('#root')?.children.length,
+        bodyChildren: document.body?.children.length,
+        frame: window.location.href
+      })
+      if (el) {
+        fullClick(parent && parent !== el ? parent : el)
+        fullClick(el)
+        window.postMessage({ type: 'EVO_CLICK_RESULT', requestId, ok: true, selector, visible }, '*')
+      } else {
+        window.postMessage(
+          { type: 'EVO_CLICK_RESULT', requestId, ok: false, error: `Not found: ${selector}` },
+          '*'
+        )
+      }
+    }
+  })
+
   console.log('Casino game interceptor injected successfully')
 })()

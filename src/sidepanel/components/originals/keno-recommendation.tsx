@@ -1,6 +1,6 @@
 import { recommendKenoNumbers } from '../../../lib/keno/scoring-weights'
-import type { GameResult } from '../../../types'
 import { cn } from '../../../lib/utils'
+import type { GameResult } from '../../../types'
 import { cardClassName } from '../roulette/roulette-analytics'
 
 interface KenoRecommendationProps {
@@ -20,7 +20,11 @@ export function KenoRecommendation({ results }: KenoRecommendationProps) {
     .slice(0, 5)
 
   return (
-    <section className={cn('rounded-[18px] p-4 text-white shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] backdrop-blur-xl', cardClassName)}>
+    <section
+      className={cn(
+        'rounded-[18px] p-4 text-white shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] backdrop-blur-xl',
+        cardClassName
+      )}>
       <div className='flex items-center justify-between gap-3'>
         <div>
           <p className='text-[0.64rem] uppercase tracking-[0.28em] text-cyan-100/70'>Keno Lab</p>

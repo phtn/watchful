@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { cn } from '../../../lib/utils'
 import type { VirtualBankrollSnapshot } from '../../../lib/virtual-bankroll'
 import type { VirtualBankrollState } from '../../../types'
-import { cn } from '../../../lib/utils'
 import { formatAmount, formatDateTime, formatSignedAmount, getNetTone } from '../../lib/formatters'
-import { CompactMetric, Metric } from '../shared/hero-metric'
 import { cardClassName } from '../roulette/roulette-analytics'
+import { CompactMetric, Metric } from '../shared/hero-metric'
 
 interface VirtualBankrollCardProps {
   bankroll: VirtualBankrollState
@@ -95,7 +95,11 @@ export function VirtualBankrollCard({
   )
 
   return (
-    <section className={cn('rounded-[18px] px-2 py-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white backdrop-blur-xl', cardClassName)}>
+    <section
+      className={cn(
+        'rounded-[18px] px-2 py-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white backdrop-blur-xl',
+        cardClassName
+      )}>
       <CompactMetric data={fields} />
       {bankroll.enabled ? (
         <>

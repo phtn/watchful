@@ -1,6 +1,6 @@
 import { getSiteLabel } from '../../../core/siteConfig'
-import type { GameResult } from '../../../types'
 import { cn } from '../../../lib/utils'
+import type { GameResult } from '../../../types'
 import {
   formatAmount,
   formatDateTime,
@@ -12,8 +12,8 @@ import {
   getSiteBadgeClass
 } from '../../lib/formatters'
 import { getGameInsights } from '../../lib/gameInsights'
-import { NumberTrack } from './number-track'
 import { cardClassName } from '../roulette/roulette-analytics'
+import { NumberTrack } from './number-track'
 
 interface GameEntryProps {
   game: GameResult
@@ -26,7 +26,11 @@ export function GameEntry({ game }: GameEntryProps) {
   const roundLabel = game.roundId !== undefined ? `#${String(game.roundId).slice(0, 8)}` : null
 
   return (
-    <article className={cn('rounded-[18px] p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white [content-visibility:auto]', cardClassName)}>
+    <article
+      className={cn(
+        'rounded-[18px] p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white [content-visibility:auto]',
+        cardClassName
+      )}>
       <div className='flex items-start justify-between gap-3'>
         <div className='min-w-0'>
           <div className='flex flex-wrap items-center gap-2'>

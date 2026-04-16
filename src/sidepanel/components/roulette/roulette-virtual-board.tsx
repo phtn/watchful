@@ -1,4 +1,4 @@
-import { PropsWithChildren, useEffect, useMemo, useRef, useState } from 'react'
+import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BOARD_ROWS,
   KIMS_ALGO_QUADRANTS,
@@ -15,11 +15,13 @@ import {
 import { getNumberTone } from '../../../lib/roulette/utils'
 import { cn } from '../../../lib/utils'
 import type { PanelStatus } from '../../../types'
+import { ChipStack } from './chip-stack'
 import { cardClassName } from './roulette-analytics'
 
 interface RouletteVirtualBoardProps {
   status: PanelStatus
   winningNumbers: readonly number[]
+  evolutionChips: number[]
 }
 
 function formatQuadrantLabel(quadrant: KimQuadrantId): string {
@@ -96,7 +98,28 @@ function StepTone({ value }: { value: string }) {
   )
 }
 
-export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtualBoardProps) {
+const EVOLUTION_CHIP_COLORS: Record<number, string> = {
+  25: 'rgb(249, 150, 57)',
+  50: 'rgb(89, 89, 89)',
+  100: 'rgb(255, 130, 214)',
+  250: 'rgb(206, 29, 0)',
+  1250: 'rgb(5, 174, 41)',
+  5000: 'rgb(26, 26, 26)'
+}
+
+function getChipColor(value: number): string {
+  return EVOLUTION_CHIP_COLORS[value] ?? 'rgb(120, 120, 120)'
+}
+
+function formatChipLabel(value: number): string {
+  if (value >= 1000) {
+    const k = value / 1000
+    return Number.isInteger(k) ? `${k}k` : `${k}k`
+  }
+  return String(value)
+}
+
+export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }: RouletteVirtualBoardProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
   const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
   const [baseUnitInput, setBaseUnitInput] = useState('1')
@@ -110,6 +133,8 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
   const [lastWinProfit, setLastWinProfit] = useState<number | null>(null)
   const [lockedBankValue, setLockedBankValue] = useState<number | null>(null)
   const [inputMode, setInputMode] = useState<'base' | 'bank'>('base')
+  const [showChipSelector, setShowChipSelector] = useState(false)
+  const [selectedChip, setSelectedChip] = useState<number | null>(null)
   const processedStepCountRef = useRef(0)
 
   const parsedInput = Number.parseFloat(baseUnitInput)
@@ -263,7 +288,45 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
     setLockedBankValue(baseUnit * 288)
     setIsTracking(true)
   }
+  const placeEvolutionBets = (quadrant: KimQuadrantId) => {
+    if (!selectedChip) return
+    const numbers = [...KIMS_ALGO_QUADRANTS[quadrant]]
+    chrome.runtime.sendMessage({ type: 'PLACE_EVOLUTION_BETS', chipValue: selectedChip, numbers }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('Failed to place bets:', chrome.runtime.lastError.message)
+        return
+      }
+      if (response?.ok) {
+        console.log('Bets placed:', response.placed)
+      } else {
+        console.warn('Bet placement issue:', response)
+      }
+    })
+  }
+
   const winAmount = 36 * nextBet.unitStake
+
+  const onChipSelect = useCallback(
+    (v: number) => () => {
+      setSelectedChip(v)
+      setBaseUnitInput(String(v))
+      setInputMode('base')
+      chrome.runtime.sendMessage(
+        {
+          type: 'CLICK_EVOLUTION_ELEMENT',
+          selector: `div[data-role="chip"][data-value="${v}"]`
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn('Chip click failed:', chrome.runtime.lastError.message)
+          } else {
+            console.log('Chip click:', response)
+          }
+        }
+      )
+    },
+    []
+  )
   // border border-white/12 bg-[linear-gradient(180deg,rgba(8,15,29,0.96),rgba(11,19,35,0.92))]
   return (
     <section
@@ -405,6 +468,9 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
                         onClick={() => {
                           if (interactiveQuadrant) {
                             setStartingQuadrant(interactiveQuadrant)
+                            if (selectedChip) {
+                              placeEvolutionBets(interactiveQuadrant)
+                            }
                           }
                         }}
                         onMouseEnter={() => {
@@ -474,6 +540,92 @@ export function RouletteVirtualBoard({ status, winningNumbers }: RouletteVirtual
                 Auto idle start: {formatQuadrantLabel(autoStartingQuadrant)} from the latest shared pair.
               </span>
             ) : null}
+          </div>
+
+          <div className='mt-3'>
+            <div className='flex items-center gap-3'>
+              <button
+                type='button'
+                onClick={() => setShowChipSelector((v) => !v)}
+                className='text-[0.6rem] uppercase tracking-[0.22em] text-slate-500 hover:text-slate-300 transition-colors'>
+                {showChipSelector ? '▾ Chips' : '▸ Chips'}
+                {evolutionChips.length > 0 && !showChipSelector && (
+                  <span className='ml-1.5 text-emerald-400/70'>({evolutionChips.length})</span>
+                )}
+              </button>
+              <button
+                type='button'
+                onClick={() => {
+                  chrome.runtime.sendMessage(
+                    { type: 'CLICK_EVOLUTION_ELEMENT', selector: '[data-role="plus-table-button"]' },
+                    (response) => {
+                      if (chrome.runtime.lastError) {
+                        console.warn('Tables click failed:', chrome.runtime.lastError.message)
+                      } else {
+                        console.log('Tables click:', response)
+                      }
+                    }
+                  )
+                }}
+                className='text-[0.6rem] uppercase tracking-[0.22em] text-slate-500 hover:text-slate-300 transition-colors'>
+                Tables
+              </button>
+            </div>
+            {showChipSelector && (
+              <div className='mt-2 flex flex-wrap gap-2'>
+                {evolutionChips.length > 0 ? (
+                  evolutionChips.map((chipValue) => {
+                    const isSelected = selectedChip === chipValue
+                    const chipColor = getChipColor(chipValue)
+
+                    return (
+                      <button
+                        key={chipValue}
+                        type='button'
+                        disabled={isTracking}
+                        onClick={() => {
+                          setSelectedChip(chipValue)
+                          setBaseUnitInput(String(chipValue))
+                          setInputMode('base')
+                          chrome.runtime.sendMessage(
+                            {
+                              type: 'CLICK_EVOLUTION_ELEMENT',
+                              selector: `div[data-role="chip"][data-value="${chipValue}"]`
+                            },
+                            (response) => {
+                              if (chrome.runtime.lastError) {
+                                console.warn('Chip click failed:', chrome.runtime.lastError.message)
+                              } else {
+                                console.log('Chip click:', response)
+                              }
+                            }
+                          )
+                        }}
+                        title={`Set base unit to ${chipValue}`}
+                        className={cn(
+                          'relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-[0.6rem] font-bold transition-all',
+                          'disabled:cursor-not-allowed disabled:opacity-40',
+                          isSelected ? 'scale-110 shadow-[0_0_8px_rgba(255,255,255,0.3)]' : 'hover:scale-105'
+                        )}
+                        style={{
+                          borderColor: chipColor,
+                          backgroundColor: isSelected ? chipColor : 'transparent',
+                          color: isSelected ? '#fff' : chipColor
+                        }}>
+                        {formatChipLabel(chipValue)}
+                      </button>
+                    )
+                  })
+                ) : (
+                  <p className='text-[0.58rem] text-slate-500 italic'>
+                    No chips detected — open an Evolution roulette table.
+                  </p>
+                )}
+              </div>
+            )}
+            <div>
+              <ChipStack chipsDetected={evolutionChips} onChipSelect={onChipSelect} />
+            </div>
           </div>
           <div className='mt-4 grid gap-2 grid-cols-4'>
             <Stat>

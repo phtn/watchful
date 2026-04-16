@@ -52,6 +52,20 @@
   font-mono: swap;
 }
 
+@theme inline {
+  --color-keno: var(--keno);
+  --color-meno: var(--meno);
+  --color-cn: var(--cn);
+  --color-c0: var(--c0);
+  --color-c1: var(--c1);
+  --color-c2: var(--c2);
+  --color-c3: var(--c3);
+  --color-c4: var(--c4);
+  --color-c5: var(--c5);
+  --color-c6: var(--c6);
+  --color-zero: var(--zero);
+}
+
 :root {
   --panel-bg: #282828;
   --panel-ink: #102033;
@@ -63,8 +77,17 @@
   --font-line: 'Geist Pixel Line', sans-serif;
   --font-grid: 'Geist Pixel Grid', sans-serif;
   --font-tri: 'Geist Pixel Triangle', sans-serif;
-  --color-keno: #962eff;
-  --color-meno: #071824;
+  --keno: #962eff;
+  --meno: #071824;
+  --cn: #f99639;
+  --c0: #669999;
+  --c1: #f99639;
+  --c2: #595959;
+  --c3: #ff82d6;
+  --c4: #ce1d00;
+  --c5: #05ae29;
+  --c6: #1a1a1a;
+  --zero: #166958;
 }
 
 * {

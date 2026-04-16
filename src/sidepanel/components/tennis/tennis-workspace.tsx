@@ -38,7 +38,11 @@ function TennisEventCard({ event }: { event: TennisEvent }) {
   const visibleMarkets = event.markets.slice(0, 6)
 
   return (
-    <article className={cn('overflow-hidden rounded-[18px] shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white', cardClassName)}>
+    <article
+      className={cn(
+        'overflow-hidden rounded-[18px] shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white',
+        cardClassName
+      )}>
       <div className='grid gap-3 p-4 xl:grid-cols-[0.88fr_1.12fr]'>
         <div className='rounded-[16px] border border-white/10 bg-black/20 p-4 text-white'>
           <div className='flex items-start justify-between gap-3'>
@@ -60,7 +64,11 @@ function TennisEventCard({ event }: { event: TennisEvent }) {
                 }`}>
                 <div className='flex items-center gap-3'>
                   {player.flagUrl ? (
-                    <img src={player.flagUrl} alt='' className='h-6 w-6 rounded-full border border-white/10 object-cover' />
+                    <img
+                      src={player.flagUrl}
+                      alt=''
+                      className='h-6 w-6 rounded-full border border-white/10 object-cover'
+                    />
                   ) : (
                     <div className='h-6 w-6 rounded-full border border-white/10 bg-white/10' />
                   )}
@@ -90,7 +98,10 @@ function TennisEventCard({ event }: { event: TennisEvent }) {
             {visibleMarkets.map((market, index) => (
               <section
                 key={`${event.id}-${market.name}`}
-                className={cn(`w-[190px] shrink-0 rounded-[16px] border p-3 text-white ${getMarketAccent(index)}`, 'shadow-[0_18px_40px_-30px_rgba(15,23,42,0.55)]')}>
+                className={cn(
+                  `w-[190px] shrink-0 rounded-[16px] border p-3 text-white ${getMarketAccent(index)}`,
+                  'shadow-[0_18px_40px_-30px_rgba(15,23,42,0.55)]'
+                )}>
                 <p className='text-[0.65rem] uppercase tracking-[0.18em] text-slate-300'>{market.name}</p>
                 <div className='mt-3 space-y-2'>
                   {market.outcomes.map((outcome) => (
@@ -108,7 +119,9 @@ function TennisEventCard({ event }: { event: TennisEvent }) {
               <section className='flex w-[150px] shrink-0 items-center justify-center rounded-[16px] border border-dashed border-white/12 bg-white/[0.03] p-3 text-center text-slate-300'>
                 <div>
                   <p className='font-line text-[0.62rem] uppercase tracking-[0.24em]'>More Markets</p>
-                  <p className='mt-2 text-xl font-semibold text-white'>+{event.markets.length - visibleMarkets.length}</p>
+                  <p className='mt-2 text-xl font-semibold text-white'>
+                    +{event.markets.length - visibleMarkets.length}
+                  </p>
                 </div>
               </section>
             ) : null}
@@ -124,7 +137,11 @@ export function TennisWorkspace({ status, stats, onReset }: TennisWorkspaceProps
 
   return (
     <div className='space-y-2 pb-6'>
-      <section className={cn('relative overflow-hidden rounded-[18px] p-5 text-white shadow-[0_32px_90px_-38px_rgba(15,23,42,0.78)]', cardClassName)}>
+      <section
+        className={cn(
+          'relative overflow-hidden rounded-[18px] p-5 text-white shadow-[0_32px_90px_-38px_rgba(15,23,42,0.78)]',
+          cardClassName
+        )}>
         <div className='absolute inset-x-[-15%] top-[-28%] h-48 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.34),transparent_68%)] blur-2xl' />
         <div className='absolute bottom-[-25%] right-[-12%] h-44 w-44 rounded-full bg-[radial-gradient(circle,rgba(16,185,129,0.26),transparent_68%)] blur-2xl' />
         <div className='relative'>

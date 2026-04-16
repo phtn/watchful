@@ -45,6 +45,7 @@ type CapturedRouletteMessage = EvoMessage | PragmaticPlayMessage
 
 let tennisSyncTimer: number | null = null
 let lastTennisSignature = ''
+let lastChipSignature = ''
 
 const script = document.createElement('script')
 script.src = chrome.runtime.getURL('dist/injected.js')
@@ -1076,3 +1077,171 @@ function initTennisCapture(): void {
 }
 
 initTennisCapture()
+
+// Evolution board element locator — finds selector in any frame, reports coords
+// in the TOP-LEVEL viewport so background can dispatch a trusted CDP click there.
+// This works across OOPIFs (cross-origin iframes) by walking the frame chain via
+// postMessage, adding each iframe's offset as we go up.
+
+function deepQuery(root: ParentNode, selector: string): HTMLElement | null {
+  const found = root.querySelector<HTMLElement>(selector)
+  if (found) return found
+  const hosts = root.querySelectorAll('*')
+  for (const host of hosts) {
+    if (host.shadowRoot) {
+      const inner = deepQuery(host.shadowRoot, selector)
+      if (inner) return inner
+    }
+  }
+  return null
+}
+
+function isVisible(el: HTMLElement): boolean {
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return false
+  const style = window.getComputedStyle(el)
+  if (style.visibility === 'hidden' || style.display === 'none') return false
+  return true
+}
+
+function reportCoordsToBackground(requestId: string, x: number, y: number, selector: string): void {
+  try {
+    chrome.runtime.sendMessage({
+      type: 'EVO_COORDS_FOUND',
+      requestId,
+      selector,
+      x,
+      y,
+      frame: window.location.href
+    })
+  } catch (error) {
+    console.warn('[watchful-wind] Failed to report coords:', error)
+  }
+}
+
+function sendCoordsUp(requestId: string, x: number, y: number, selector: string): void {
+  if (window.top === window || !window.parent) {
+    reportCoordsToBackground(requestId, x, y, selector)
+    return
+  }
+  window.parent.postMessage(
+    { type: 'EVO_TRANSLATE_COORDS', requestId, selector, local: { x, y } },
+    '*'
+  )
+}
+
+function findIframeForSource(source: MessageEventSource | null): HTMLIFrameElement | null {
+  if (!source) return null
+  const iframes = document.querySelectorAll('iframe')
+  for (const iframe of iframes) {
+    if (iframe.contentWindow === source) return iframe
+  }
+  return null
+}
+
+// Translate child-frame coords into this frame's viewport, then continue up.
+window.addEventListener('message', (event) => {
+  const data = event.data
+  if (!data || typeof data !== 'object') return
+  if (data.type !== 'EVO_TRANSLATE_COORDS') return
+
+  const { requestId, selector, local } = data as {
+    requestId: string
+    selector: string
+    local: { x: number; y: number }
+  }
+
+  const iframe = findIframeForSource(event.source)
+  if (!iframe) {
+    // Can't locate the iframe child — drop. Background will time out.
+    return
+  }
+
+  const iframeRect = iframe.getBoundingClientRect()
+  // Account for iframe borders: getBoundingClientRect includes the border box,
+  // but the child's viewport starts at the content box. For most iframes borders
+  // are 0, so this is usually a no-op. If needed we could read computed styles.
+  const x = iframeRect.left + local.x
+  const y = iframeRect.top + local.y
+
+  sendCoordsUp(requestId, x, y, selector)
+})
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'EVO_FIND_AND_REPORT') {
+    const { selector, requestId } = message as { selector: string; requestId: string }
+    try {
+      const el = deepQuery(document, selector)
+      if (!el || !isVisible(el)) {
+        sendResponse({ found: false })
+        return false
+      }
+
+      const rect = el.getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      sendCoordsUp(requestId, x, y, selector)
+      sendResponse({ found: true, frame: window.location.href })
+    } catch (error) {
+      sendResponse({ found: false, error: String(error) })
+    }
+    return false
+  }
+})
+
+// Evolution chip denomination scraping
+
+function scrapeEvolutionChipValues(): number[] {
+  const chipElements = document.querySelectorAll<HTMLElement>('div[data-role="chip"][data-value]')
+  const values: number[] = []
+
+  for (const el of chipElements) {
+    const raw = el.getAttribute('data-value')
+    if (raw) {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed > 0) {
+        values.push(parsed)
+      }
+    }
+  }
+
+  return values
+}
+
+function syncEvolutionChips(): void {
+  const values = scrapeEvolutionChipValues()
+  if (values.length === 0) {
+    return
+  }
+
+  const signature = values.join(',')
+  if (signature === lastChipSignature) {
+    return
+  }
+
+  lastChipSignature = signature
+  console.log('[watchful-wind] chips detected:', values, 'in frame:', window.location.href)
+  chrome.storage.local.set({ evolutionChips: values })
+}
+
+function initEvolutionChipCapture(): void {
+  const root = document.documentElement
+  if (!root) {
+    window.addEventListener('DOMContentLoaded', initEvolutionChipCapture, { once: true })
+    return
+  }
+
+  const observer = new MutationObserver(() => {
+    syncEvolutionChips()
+  })
+
+  observer.observe(root, {
+    childList: true,
+    subtree: true
+  })
+
+  window.addEventListener('load', syncEvolutionChips, { once: true })
+  syncEvolutionChips()
+}
+
+initEvolutionChipCapture()

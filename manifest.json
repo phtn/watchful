@@ -4,7 +4,7 @@
   "version": "1.0",
   "description": "Watch game results and calculate averages",
 
-  "permissions": ["storage", "activeTab", "sidePanel", "tabs"],
+  "permissions": ["storage", "activeTab", "sidePanel", "tabs", "webNavigation", "debugger"],
 
   "content_scripts": [
     {

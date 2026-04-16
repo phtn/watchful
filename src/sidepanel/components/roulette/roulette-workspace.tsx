@@ -9,10 +9,11 @@ import { RouletteVirtualBoard } from './roulette-virtual-board'
 interface RouletteWorkspaceProps {
   status: PanelStatus
   stats: RouletteStoredData
+  evolutionChips: number[]
   onReset: () => void
 }
 
-export function RouletteWorkspace({ status, stats, onReset }: RouletteWorkspaceProps) {
+export function RouletteWorkspace({ status, stats, evolutionChips, onReset }: RouletteWorkspaceProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
   const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
   const [selectedStartingQuadrantNumbers, setSelectedStartingQuadrantNumbers] = useState<Set<number>>(new Set())
@@ -41,7 +42,7 @@ export function RouletteWorkspace({ status, stats, onReset }: RouletteWorkspaceP
   return (
     <div className='space-y-2 pb-6 bg-[#282828]'>
       <RouletteHeader stats={stats} latestSpin={latestSpin} previewSpins={previewSpins} />
-      <RouletteVirtualBoard status={status} winningNumbers={winningNumbers} />
+      <RouletteVirtualBoard status={status} winningNumbers={winningNumbers} evolutionChips={evolutionChips} />
       <Analytics winningNumbers={winningNumbers} onReset={onReset} />
     </div>
   )

@@ -9,10 +9,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
     "types": ["chrome"],
     "plugins": [{ "name": "@tailwindcss/postcss" }]
   },
-  "include": ["src/**/*", "**/*.ts", "**/*.tsx"],
+  "include": ["src/**/*", "**/*.ts", "**/*.tsx", "src/lib/icons"],
   "exclude": ["node_modules", "dist"]
 }
