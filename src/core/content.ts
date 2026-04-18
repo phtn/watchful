@@ -1096,12 +1096,26 @@ function deepQuery(root: ParentNode, selector: string): HTMLElement | null {
   return null
 }
 
-function isVisible(el: HTMLElement): boolean {
+// We intentionally skip a full visibility check here. SVG bet-spot <rect> and
+// chip elements can have temporarily zero paint dimensions during Evolution's
+// placement animations, which would cause valid elements to be dropped. As long
+// as deepQuery can find the node, getBoundingClientRect will give us the correct
+// viewport-relative centre we need for the CDP input dispatch.
+function elementCenter(el: HTMLElement): { x: number; y: number } | null {
   const rect = el.getBoundingClientRect()
-  if (rect.width <= 0 || rect.height <= 0) return false
-  const style = window.getComputedStyle(el)
-  if (style.visibility === 'hidden' || style.display === 'none') return false
-  return true
+  if (rect.width > 0 && rect.height > 0) {
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+  // Fallback: walk up the DOM to find the nearest ancestor with a real rect.
+  let parent = el.parentElement
+  while (parent) {
+    const pr = parent.getBoundingClientRect()
+    if (pr.width > 0 && pr.height > 0) {
+      return { x: pr.left + pr.width / 2, y: pr.top + pr.height / 2 }
+    }
+    parent = parent.parentElement
+  }
+  return null
 }
 
 function reportCoordsToBackground(requestId: string, x: number, y: number, selector: string): void {
@@ -1172,14 +1186,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const { selector, requestId } = message as { selector: string; requestId: string }
     try {
       const el = deepQuery(document, selector)
-      if (!el || !isVisible(el)) {
+      if (!el) {
         sendResponse({ found: false })
         return false
       }
 
-      const rect = el.getBoundingClientRect()
-      const x = rect.left + rect.width / 2
-      const y = rect.top + rect.height / 2
+      const center = elementCenter(el)
+      if (!center) {
+        sendResponse({ found: false, reason: 'no-rect' })
+        return false
+      }
+
+      const { x, y } = center
       sendCoordsUp(requestId, x, y, selector)
       sendResponse({ found: true, frame: window.location.href })
     } catch (error) {
@@ -1187,9 +1205,84 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     return false
   }
+
+  if (message.type === 'EVO_GET_SELECTED_CHIP') {
+    // Try common DOM patterns that Evolution (and similar platforms) use to mark
+    // the currently active chip. Returns the first match's data-value as a number,
+    // or null if none of the selectors produce a result in this frame.
+    const ACTIVE_CHIP_SELECTORS = [
+      '[data-role="chip"][aria-checked="true"]',
+      '[data-role="chip"][aria-pressed="true"]',
+      '[data-role="chip"][aria-selected="true"]',
+      '[data-role="chip"][data-active="true"]',
+      '[data-role="chip"][data-selected="true"]',
+      '[data-role="chip"][data-current="true"]',
+    ]
+    let value: number | null = null
+    for (const sel of ACTIVE_CHIP_SELECTORS) {
+      const el = deepQuery(document, sel)
+      if (el) {
+        const raw = el.getAttribute('data-value')
+        const parsed = raw ? Number(raw) : NaN
+        if (Number.isFinite(parsed) && parsed > 0) {
+          value = parsed
+          break
+        }
+      }
+    }
+    sendResponse({ value })
+    return false
+  }
 })
 
 // Evolution chip denomination scraping
+
+// Betting-window detection — Evolution disables the chip stack wrapper
+// (pointer-events: none + reduced opacity) during "no more bets" phase.
+
+let lastBettingOpen: boolean | null = null
+
+function scrapeBettingOpen(): boolean {
+  // Primary: check chip stack wrapper pointer-events
+  const wrapper = deepQuery(document, '[data-role="expanded-chip-stack-wrapper"]')
+  if (!wrapper) return false
+  const wStyle = window.getComputedStyle(wrapper)
+  if (wStyle.pointerEvents === 'none') return false
+  if (parseFloat(wStyle.opacity) < 0.5) return false
+
+  // Secondary: confirm at least one chip exists and isn't individually disabled
+  const chip = deepQuery(document, '[data-role="chip"]')
+  if (!chip) return false
+  const cStyle = window.getComputedStyle(chip)
+  if (cStyle.pointerEvents === 'none') return false
+
+  return true
+}
+
+function syncBettingOpen(): void {
+  const open = scrapeBettingOpen()
+  if (open === lastBettingOpen) return
+  lastBettingOpen = open
+  chrome.storage.local.set({ evolutionBettingOpen: open })
+}
+
+// Rebet button visibility tracking
+
+let lastRebetVisible: boolean | null = null
+
+function scrapeRebetVisible(): boolean {
+  const btn = deepQuery(document, '[data-role="rebet-button"]')
+  if (!btn) return false
+  const style = window.getComputedStyle(btn)
+  return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'
+}
+
+function syncRebetVisible(): void {
+  const visible = scrapeRebetVisible()
+  if (visible === lastRebetVisible) return
+  lastRebetVisible = visible
+  chrome.storage.local.set({ evolutionRebetVisible: visible })
+}
 
 function scrapeEvolutionChipValues(): number[] {
   const chipElements = document.querySelectorAll<HTMLElement>('div[data-role="chip"][data-value]')
@@ -1233,15 +1326,25 @@ function initEvolutionChipCapture(): void {
 
   const observer = new MutationObserver(() => {
     syncEvolutionChips()
+    syncRebetVisible()
+    syncBettingOpen()
   })
 
   observer.observe(root, {
     childList: true,
-    subtree: true
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['style', 'class', 'disabled', 'hidden']
   })
 
-  window.addEventListener('load', syncEvolutionChips, { once: true })
+  window.addEventListener('load', () => {
+    syncEvolutionChips()
+    syncRebetVisible()
+    syncBettingOpen()
+  }, { once: true })
   syncEvolutionChips()
+  syncRebetVisible()
+  syncBettingOpen()
 }
 
 initEvolutionChipCapture()

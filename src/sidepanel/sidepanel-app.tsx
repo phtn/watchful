@@ -48,6 +48,8 @@ const App = () => {
   const [rouletteStats, setRouletteStats] = useState<RouletteStoredData>(EMPTY_ROULETTE_STORED_DATA)
   const [tennisStats, setTennisStats] = useState<TennisStoredData>(EMPTY_TENNIS_STORED_DATA)
   const [evolutionChips, setEvolutionChips] = useState<number[]>([])
+  const [evolutionRebetVisible, setEvolutionRebetVisible] = useState<boolean>(false)
+  const [evolutionBettingOpen, setEvolutionBettingOpen] = useState<boolean>(false)
   const [activeGameClass, setActiveGameClass] = useState<GameClassView>('originals')
   const [showSettings, setShowSettings] = useState(false)
   const deferredResults = useDeferredValue(stats.results)
@@ -94,13 +96,15 @@ const App = () => {
   }
 
   const loadEvolutionChips = () => {
-    chrome.storage.local.get(['evolutionChips'], (data) => {
+    chrome.storage.local.get(['evolutionChips', 'evolutionRebetVisible', 'evolutionBettingOpen'], (data) => {
       const chips = Array.isArray(data.evolutionChips) ? data.evolutionChips.filter((v: unknown) => typeof v === 'number' && v > 0) : []
       startTransition(() => {
         setEvolutionChips((prev) => {
           const next = chips as number[]
           return prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next
         })
+        setEvolutionRebetVisible(data.evolutionRebetVisible === true)
+        setEvolutionBettingOpen(data.evolutionBettingOpen === true)
       })
     })
   }
@@ -158,7 +162,7 @@ const App = () => {
         loadTennisResults()
       }
 
-      if (namespace === 'local' && changes.evolutionChips) {
+      if (namespace === 'local' && (changes.evolutionChips || changes.evolutionRebetVisible || changes.evolutionBettingOpen)) {
         loadEvolutionChips()
       }
     }
@@ -465,7 +469,7 @@ const App = () => {
           </>
         ) : activeGameClass === 'roulette' ? (
           <div className='px-2 pt-2'>
-            <RouletteWorkspace status={status} stats={rouletteStats} evolutionChips={evolutionChips} onReset={clearRouletteResults} />
+            <RouletteWorkspace status={status} stats={rouletteStats} evolutionChips={evolutionChips} evolutionRebetVisible={evolutionRebetVisible} evolutionBettingOpen={evolutionBettingOpen} onReset={clearRouletteResults} />
           </div>
         ) : (
           <div className='px-2 pt-2'>

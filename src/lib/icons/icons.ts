@@ -39,6 +39,12 @@ export const icons = {
       '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M3 8h12a6 6 0 0 1 0 12h-4"/><path d="m7 4l-1.154.877C3.95 6.318 3 7.039 3 8s.949 1.682 2.846 3.124L7 12"/></g>',
     viewBox: '0 0 24 24',
     set: 'hugeicons'
+  },
+  rebet: {
+    symbol:
+      '<path fill="currentColor" d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6s-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8s-3.58-8-8-8"/>',
+    viewBox: '0 0 24 24',
+    set: 'ic'
   }
 }
 

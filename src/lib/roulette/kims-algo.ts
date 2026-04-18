@@ -100,24 +100,30 @@ function getQuadrantBand(quadrantId: KimQuadrantId): 'lower' | 'upper' {
   return getQuadrantIndex(quadrantId) % 2 === 1 ? 'lower' : 'upper'
 }
 
-function getQuadrantUniquePair(quadrantId: KimQuadrantId): number[] {
-  const numbers = KIMS_ALGO_QUADRANTS[quadrantId]
+// ── Board-layout helpers ──────────────────────────────────────────────────
+// The roulette board is 3 rows × 12 columns:
+//   row 1 (n%3===1): 1, 4, 7, 10, … 34  — unique row for lower-band (odd) quadrants
+//   row 2 (n%3===2): 2, 5, 8, 11, … 35  — shared row (never a spread target)
+//   row 3 (n%3===0): 3, 6, 9, 12, … 36  — unique row for upper-band (even) quadrants
 
-  return getQuadrantBand(quadrantId) === 'lower' ? [numbers[0], numbers[3]] : [numbers[1], numbers[2]]
+/** 1-based column of a number on the roulette board. */
+function getNumberColumn(n: number): number {
+  return Math.ceil(n / 3)
 }
 
-function toQuadrantId(index: number): KimQuadrantId {
-  return `q${index}` as KimQuadrantId
+/**
+ * The pair of columns spanned by a quadrant.
+ * q1/q2 → [1,2], q3/q4 → [3,4], …, q11/q12 → [11,12].
+ */
+function getQuadrantColumns(quadrantId: KimQuadrantId): readonly [number, number] {
+  const group = Math.ceil(getQuadrantIndex(quadrantId) / 2)
+  return [group * 2 - 1, group * 2] as const
 }
 
-function getAdjacentSpreadQuadrants(quadrantId: KimQuadrantId, mode: KimSpreadSelectionMode): KimQuadrantId[] {
-  const quadrantIndex = getQuadrantIndex(quadrantId)
-  const offsets = mode === 'within' ? [2, -2] : [1, -1, 2, -2]
-
-  return offsets
-    .map((offset) => quadrantIndex + offset)
-    .filter((index) => index >= 1 && index <= 12)
-    .map((index) => toQuadrantId(index))
+/** Minimum column distance from number n to the nearest edge of a quadrant's column span. */
+function getColumnDistance(n: number, cols: readonly [number, number]): number {
+  const col = getNumberColumn(n)
+  return Math.min(Math.abs(col - cols[0]), Math.abs(col - cols[1]))
 }
 
 function assertValidRound(round: number): asserts round is KimAlgoRound {
@@ -233,56 +239,87 @@ function resolveQuadrantPlacements(
   const baseNumbers = [...KIMS_ALGO_QUADRANTS[quadrant]]
 
   if (allowOverlaps) {
-    return {
-      numbers: baseNumbers,
-      spreadApplied: false
-    }
+    return { numbers: baseNumbers, spreadApplied: false }
   }
 
   const placedSet = new Set(placedNumbers)
-  const uniqueNumbers = baseNumbers.filter((value) => !placedSet.has(value))
-  const hotNumberRanks = new Map(hotNumbers.map((value, index) => [value, index]))
+  const uniqueNumbers = baseNumbers.filter((v) => !placedSet.has(v))
   const missingCount = baseNumbers.length - uniqueNumbers.length
-  const spreadApplied = missingCount > 0
 
   if (missingCount <= 0) {
-    return {
-      numbers: baseNumbers,
-      spreadApplied: false
-    }
+    return { numbers: baseNumbers, spreadApplied: false }
   }
 
-  const spreadNumbers = getAdjacentSpreadQuadrants(quadrant, spreadSelectionMode)
-    .flatMap((candidateQuadrant) => getQuadrantUniquePair(candidateQuadrant))
-    .filter((value) => !placedSet.has(value) && !uniqueNumbers.includes(value))
-    .sort((left, right) => {
-      const hotRankLeft = hotNumberRanks.get(left)
-      const hotRankRight = hotNumberRanks.get(right)
-      const leftIsHot = hotRankLeft !== undefined
-      const rightIsHot = hotRankRight !== undefined
+  const hotRanks = new Map(hotNumbers.map((v, i) => [v, i]))
 
-      if (leftIsHot !== rightIsHot) {
-        return leftIsHot ? -1 : 1
+  let spreadNumbers: number[]
+
+  if (spreadSelectionMode === 'across') {
+    // ── Across ─────────────────────────────────────────────────────────────
+    // Take the top hot numbers (hottest-first) that are not yet placed or in
+    // the quadrant's own unique slots.  If hot numbers run out, fall back to
+    // any remaining unplaced number sorted hot-first then descending.
+    const isAvailable = (n: number) => n !== 0 && !placedSet.has(n) && !uniqueNumbers.includes(n)
+
+    const candidates: number[] = []
+    for (const n of hotNumbers) {
+      if (isAvailable(n)) {
+        candidates.push(n)
+        if (candidates.length === missingCount) break
       }
-
-      if (leftIsHot && rightIsHot && hotRankLeft !== hotRankRight) {
-        return hotRankLeft - hotRankRight
-      }
-
-      return right - left
-    })
-    .slice(0, missingCount)
-
-  if (spreadNumbers.length === 0) {
-    return {
-      numbers: uniqueNumbers,
-      spreadApplied
     }
+
+    if (candidates.length < missingCount) {
+      const candidateSet = new Set(candidates)
+      const extra = Array.from({ length: 36 }, (_, i) => i + 1)
+        .filter((n) => isAvailable(n) && !candidateSet.has(n))
+        .sort((a, b) => {
+          const ha = hotRanks.get(a)
+          const hb = hotRanks.get(b)
+          if (ha !== undefined && hb !== undefined) return ha - hb
+          if (ha !== undefined) return -1
+          if (hb !== undefined) return 1
+          return b - a
+        })
+      candidates.push(...extra.slice(0, missingCount - candidates.length))
+    }
+
+    spreadNumbers = candidates
+  } else {
+    // ── Within ─────────────────────────────────────────────────────────────
+    // Spread along the quadrant's own "unique row":
+    //   lower-band (odd index) quadrants → row 1 (n % 3 === 1): 1, 4, 7, … 34
+    //   upper-band (even index) quadrants → row 3 (n % 3 === 0): 3, 6, 9, … 36
+    // Pick the closest available numbers in that row (by column distance),
+    // with equal-distance ties broken by hot rank.
+    const targetRow = getQuadrantBand(quadrant) === 'lower' ? 1 : 3
+    const quadCols = getQuadrantColumns(quadrant)
+
+    const rowNumbers =
+      targetRow === 1
+        ? Array.from({ length: 12 }, (_, i) => i * 3 + 1)   // 1, 4, 7, … 34
+        : Array.from({ length: 12 }, (_, i) => (i + 1) * 3) // 3, 6, 9, … 36
+
+    spreadNumbers = rowNumbers
+      .filter((n) => !placedSet.has(n) && !uniqueNumbers.includes(n))
+      .sort((a, b) => {
+        const dA = getColumnDistance(a, quadCols)
+        const dB = getColumnDistance(b, quadCols)
+        if (dA !== dB) return dA - dB
+        // Equal distance → prefer hot, then keep both directions available
+        const ha = hotRanks.get(a)
+        const hb = hotRanks.get(b)
+        if (ha !== undefined && hb !== undefined) return ha - hb
+        if (ha !== undefined) return -1
+        if (hb !== undefined) return 1
+        return 0
+      })
+      .slice(0, missingCount)
   }
 
   return {
     numbers: [...uniqueNumbers, ...spreadNumbers],
-    spreadApplied
+    spreadApplied: true
   }
 }
 

@@ -8,12 +8,25 @@ interface Chip extends ChipProps {
   id: string
 }
 
+// Evolution data-role selectors for the flanking action buttons.
+// Inspect the actual DOM if any of these need to be adjusted.
+export const EVO_BUTTON_SELECTORS = {
+  undo: '[data-role="undo-last-bet-button"]',
+  rebet: '[data-role="rebet-button"]',
+  double: '[data-role="double-bets-button"]'
+} as const
+
 interface ChipStackProps {
   chipsDetected: number[]
   onChipSelect: (value: number) => VoidFunction
+  onUndo?: VoidFunction
+  /** Only pass this when Evolution's rebet button is visible; omit to hide the button. */
+  onRebet?: VoidFunction
+  onDouble?: VoidFunction
+  onTables?: VoidFunction
 }
 
-export const ChipStack = ({ chipsDetected, onChipSelect }: ChipStackProps) => {
+export const ChipStack = ({ chipsDetected, onChipSelect, onUndo, onRebet, onDouble, onTables }: ChipStackProps) => {
   const chips = useMemo(
     () =>
       [
@@ -21,10 +34,10 @@ export const ChipStack = ({ chipsDetected, onChipSelect }: ChipStackProps) => {
           id: 'n',
           value: 5,
           fill: 'fill-cn',
-          stroke: 'stroke-jn',
+          stroke: 'stroke-cn',
           selected: true,
           size: 31,
-          offset: { x: '26%', y: '57%' }
+          offset: { x: '36%', y: '57%' }
         },
         {
           id: '0',
@@ -33,7 +46,7 @@ export const ChipStack = ({ chipsDetected, onChipSelect }: ChipStackProps) => {
           stroke: 'stroke-c0',
           selected: true,
           size: 31,
-          offset: { x: '26%', y: '57%' }
+          offset: { x: '28%', y: '57%' }
         },
         {
           id: '1',
@@ -68,20 +81,34 @@ export const ChipStack = ({ chipsDetected, onChipSelect }: ChipStackProps) => {
         <div
           className='bg-orange-100/0 py-4 flex items-center justify-center space-x-8'
           data-role='expanded-chip-stack-wrapper'>
-          <button className='flex space-x-4' disabled={false}>
-            <span className='text-sm'>UNDO</span>
-            <Icon name='undo' />
+          <button className='flex space-x-4' onClick={onUndo} title='Undo last bet'>
+            <Icon name='undo' className='size-6' />
           </button>
+
           <div data-role='chip-stack' className='flex space-x-4'>
             {chips.map((chip) => (
               <Chip key={chip.id} {...chip} onClick={onChipSelect(chip.value)} />
             ))}
           </div>
-          <button className='flex items-center space-x-4' disabled={false}>
-            <span className='text-sm'>x2</span>
-            <span className='' data-role='expanded-chip-stack-double-repeat-label'>
-              DOUBLE
-            </span>
+
+          {onRebet && (
+            <button
+              className='flex items-center space-x-2 text-xs font-semibold uppercase tracking-wide opacity-70 hover:opacity-100 transition-opacity'
+              onClick={onRebet}
+              title='Rebet'>
+              <Icon name='rebet' className='size-6' />
+            </button>
+          )}
+
+          <button className='flex items-center space-x-4' onClick={onDouble} title='Double bets'>
+            <span className='text-lg'>2x</span>
+          </button>
+
+          <button
+            className='flex items-center text-[0.6rem] font-semibold uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity'
+            onClick={onTables}
+            title='Browse tables'>
+            <span>Tables</span>
           </button>
         </div>
       </div>
@@ -108,7 +135,7 @@ const Chip = ({ value, fill, stroke, selected, size, offset, onClick }: ChipProp
       className='chipItem cursor-pointer active:scale-80 transition-transform duration-300 ease-in-out'
       data-role={selected ? 'selected-chip' : 'chip'}>
       <div className='chip' data-role='chip' data-value={value}>
-        <svg viewBox='0 0 78 78' className='h-10' data-role='default-svg'>
+        <svg viewBox='0 0 78 78' className='h-9 aspect-square' data-role='default-svg'>
           <g>
             <circle className={cn(fill, stroke)} cx='39.019' cy='38.999' r='38.5' />
             <path

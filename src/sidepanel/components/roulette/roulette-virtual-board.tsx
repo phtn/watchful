@@ -15,13 +15,15 @@ import {
 import { getNumberTone } from '../../../lib/roulette/utils'
 import { cn } from '../../../lib/utils'
 import type { PanelStatus } from '../../../types'
-import { ChipStack } from './chip-stack'
+import { ChipStack, EVO_BUTTON_SELECTORS } from './chip-stack'
 import { cardClassName } from './roulette-analytics'
 
 interface RouletteVirtualBoardProps {
   status: PanelStatus
   winningNumbers: readonly number[]
   evolutionChips: number[]
+  evolutionRebetVisible: boolean
+  evolutionBettingOpen: boolean
 }
 
 function formatQuadrantLabel(quadrant: KimQuadrantId): string {
@@ -98,28 +100,8 @@ function StepTone({ value }: { value: string }) {
   )
 }
 
-const EVOLUTION_CHIP_COLORS: Record<number, string> = {
-  25: 'rgb(249, 150, 57)',
-  50: 'rgb(89, 89, 89)',
-  100: 'rgb(255, 130, 214)',
-  250: 'rgb(206, 29, 0)',
-  1250: 'rgb(5, 174, 41)',
-  5000: 'rgb(26, 26, 26)'
-}
 
-function getChipColor(value: number): string {
-  return EVOLUTION_CHIP_COLORS[value] ?? 'rgb(120, 120, 120)'
-}
-
-function formatChipLabel(value: number): string {
-  if (value >= 1000) {
-    const k = value / 1000
-    return Number.isInteger(k) ? `${k}k` : `${k}k`
-  }
-  return String(value)
-}
-
-export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }: RouletteVirtualBoardProps) {
+export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, evolutionRebetVisible, evolutionBettingOpen }: RouletteVirtualBoardProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
   const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
   const [baseUnitInput, setBaseUnitInput] = useState('1')
@@ -133,9 +115,25 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
   const [lastWinProfit, setLastWinProfit] = useState<number | null>(null)
   const [lockedBankValue, setLockedBankValue] = useState<number | null>(null)
   const [inputMode, setInputMode] = useState<'base' | 'bank'>('base')
-  const [showChipSelector, setShowChipSelector] = useState(false)
   const [selectedChip, setSelectedChip] = useState<number | null>(null)
+  // Auto-arm: arm the board automatically when a KIM signal is detected
+  const [auto, setAuto] = useState(false)
+  // Loaded: auto-execute v-board bets on the actual Evolution table each betting window
+  const [loaded, setLoaded] = useState(false)
+  // Bet verification feedback: 'idle' | 'placing' | 'ok' | 'missed'
+  const [betStatus, setBetStatus] = useState<'idle' | 'placing' | 'ok' | 'missed'>('idle')
+
   const processedStepCountRef = useRef(0)
+  // Edge-detection refs
+  const prevSignalFoundRef = useRef(false)
+  // Guard: tracks the simulation step count for which we last placed bets.
+  // -1 means no bets placed yet for the current armed session.
+  const lastBetStepRef = useRef(-1)
+  // Fresh-open guard: prevents placing bets into an already-open betting window
+  // at the moment the board is armed. Only cleared once we see a genuine
+  // false → true transition of evolutionBettingOpen after arming.
+  const prevBettingOpenRef = useRef(false)
+  const firstOpenSeenAfterArmRef = useRef(false)
 
   const parsedInput = Number.parseFloat(baseUnitInput)
   const baseUnit =
@@ -273,6 +271,138 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
     }
   }, [simulation.steps, isTracking])
 
+  // ── Auto-arm ──────────────────────────────────────────────────────────────
+  // Fire exactly once on the rising edge of signalFound while auto is on.
+  useEffect(() => {
+    const wasSignal = prevSignalFoundRef.current
+    prevSignalFoundRef.current = signalFound
+    if (!auto || isTracking) return
+    if (signalFound && !wasSignal) {
+      // Signal just appeared — arm the board
+      if (autoStartingQuadrant) setStartingQuadrant(autoStartingQuadrant)
+      setTrackedWinningNumbers([])
+      setLastConsumedIndex(winningNumbers.length)
+      setLockedBankValue(baseUnit * 288)
+      setIsTracking(true)
+    }
+  }, [auto, signalFound, isTracking, autoStartingQuadrant, baseUnit, winningNumbers.length])
+
+  // ── Loaded: auto-execute bets once per simulation step ───────────────────
+  // Reset both guards when arming/disarming. Capture the current betting-window
+  // state so the transition detector starts from the right baseline.
+  useEffect(() => {
+    lastBetStepRef.current = -1
+    firstOpenSeenAfterArmRef.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    prevBettingOpenRef.current = evolutionBettingOpen  // snapshot at arm time
+  }, [isTracking])
+
+  // Detect a genuine false → true betting-window opening while armed.
+  // This fires on every evolutionBettingOpen change and keeps prevBettingOpenRef in sync.
+  useEffect(() => {
+    const wasOpen = prevBettingOpenRef.current
+    prevBettingOpenRef.current = evolutionBettingOpen
+    if (!wasOpen && evolutionBettingOpen && isTracking) {
+      firstOpenSeenAfterArmRef.current = true
+    }
+  }, [evolutionBettingOpen, isTracking])
+
+  useEffect(() => {
+    if (!loaded || !isTracking || !evolutionBettingOpen) return
+    if (!firstOpenSeenAfterArmRef.current) return  // wait for a fresh betting-window open after arming
+    if (!selectedChip) return                      // no chip selected yet
+    if (nextBet.numbers.length === 0) return       // nothing to bet
+
+    const currentStep = simulation.steps.length
+    if (lastBetStepRef.current === currentStep) return  // already bet for this step
+    lastBetStepRef.current = currentStep
+
+    setBetStatus('placing')
+
+    // Build the effective placement map — identical to placementMap but with 0 added
+    // (count = 1) when the round calls for a zero hedge (rounds 4 and 5).
+    // Zero lives in nextBet.zeroStake, NOT in nextBet.numbers, so it would otherwise
+    // be silently skipped.
+    const effectivePlacementMap = new Map(placementMap)
+    if (nextBet.zeroStake > 0) {
+      effectivePlacementMap.set(0, 1)
+    }
+
+    // Expand the numbers array: each unique slot is clicked (placementCount × roundMultiplier) times.
+    // placementCount > 1 happens in overlap mode where a slot falls in multiple active quadrants.
+    // roundMultiplier handles the KIM progressive doubling (rounds 3→2×, 4→4×, 5→8×).
+    const baseNumbers: number[] = []
+    for (const [num, count] of effectivePlacementMap) {
+      for (let i = 0; i < count * roundMultiplier; i++) {
+        baseNumbers.push(num)
+      }
+    }
+
+    // ── Chip-level upgrade ────────────────────────────────────────────────────
+    // If every slot's total value (clicks × chipValue) is evenly divisible by
+    // the next chip level, upgrade to that chip and reduce click counts accordingly.
+    // This avoids hammering a slot multiple times when a single higher-value click suffices.
+    const sortedChips = [...evolutionChips].sort((a, b) => a - b)
+    const chipIdx = sortedChips.findIndex((c) => c === selectedChip)
+    const nextChipValue = chipIdx >= 0 && chipIdx < sortedChips.length - 1 ? sortedChips[chipIdx + 1] : null
+
+    let chipToUse = selectedChip
+    let numbersToClick = baseNumbers
+
+    if (nextChipValue !== null) {
+      const canUpgrade = [...effectivePlacementMap.entries()].every(
+        ([, count]) => (count * roundMultiplier * selectedChip) % nextChipValue === 0
+      )
+      if (canUpgrade) {
+        chipToUse = nextChipValue
+        numbersToClick = []
+        for (const [num, count] of effectivePlacementMap) {
+          const clicks = (count * roundMultiplier * selectedChip) / nextChipValue
+          for (let i = 0; i < clicks; i++) numbersToClick.push(num)
+        }
+        // Select the upgraded chip on the virtual board — this updates state AND
+        // fires sendEvoClick so Evolution's board switches to the new chip value
+        // before PLACE_EVOLUTION_BETS runs its own chip click.
+        onChipSelect(nextChipValue)()
+        console.log(`[Load] ↑ Chip upgraded ${selectedChip} → ${nextChipValue}`)
+      }
+    }
+
+    console.log(
+      `[Load] Placing bets — round ${nextBet.round}, ${roundMultiplier}x, chip ${chipToUse}, ${numbersToClick.length} clicks`,
+      numbersToClick
+    )
+
+    chrome.runtime.sendMessage(
+      { type: 'PLACE_EVOLUTION_BETS', chipValue: chipToUse, numbers: numbersToClick },
+      (response) => {
+        const missed: number[] = response?.missed ?? []
+        const placed: number[] = response?.placed ?? []
+        const ok = !chrome.runtime.lastError && response?.ok && missed.length === 0
+
+        setBetStatus(ok ? 'ok' : 'missed')
+        setTimeout(() => setBetStatus('idle'), 4000)
+
+        if (ok) {
+          console.log(
+            `[Load] ✓ Verified — ${placed.length}/${numbersToClick.length} placed`,
+            `round ${nextBet.round} (${roundMultiplier}x, chip ${chipToUse})`
+          )
+        } else {
+          console.warn(
+            `[Load] ⚠ Mismatch — placed ${placed.length}/${numbersToClick.length}`,
+            { missed, error: chrome.runtime.lastError?.message }
+          )
+        }
+      }
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [evolutionBettingOpen, loaded, isTracking, selectedChip, simulation.steps.length])
+  // ^ placementMap/roundMultiplier/nextBet intentionally omitted from deps —
+  //   they are read from the closure at fire time. The primary triggers are:
+  //   • evolutionBettingOpen  — window opens for a new round
+  //   • simulation.steps.length — a new round has been logged (succeeding rounds)
+
   const handleTrackingToggle = () => {
     if (isTracking) {
       setIsTracking(false)
@@ -288,9 +418,8 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
     setLockedBankValue(baseUnit * 288)
     setIsTracking(true)
   }
-  const placeEvolutionBets = (quadrant: KimQuadrantId) => {
+  const placeEvolutionBets = (numbers: number[]) => {
     if (!selectedChip) return
-    const numbers = [...KIMS_ALGO_QUADRANTS[quadrant]]
     chrome.runtime.sendMessage({ type: 'PLACE_EVOLUTION_BETS', chipValue: selectedChip, numbers }, (response) => {
       if (chrome.runtime.lastError) {
         console.warn('Failed to place bets:', chrome.runtime.lastError.message)
@@ -306,27 +435,33 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
 
   const winAmount = 36 * nextBet.unitStake
 
+  const sendEvoClick = useCallback((selector: string, label: string) => {
+    chrome.runtime.sendMessage(
+      { type: 'CLICK_EVOLUTION_ELEMENT', selector },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn(`[evo] ${label} click failed:`, chrome.runtime.lastError.message)
+        } else {
+          console.log(`[evo] ${label} click:`, response)
+        }
+      }
+    )
+  }, [])
+
   const onChipSelect = useCallback(
     (v: number) => () => {
       setSelectedChip(v)
       setBaseUnitInput(String(v))
       setInputMode('base')
-      chrome.runtime.sendMessage(
-        {
-          type: 'CLICK_EVOLUTION_ELEMENT',
-          selector: `div[data-role="chip"][data-value="${v}"]`
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.warn('Chip click failed:', chrome.runtime.lastError.message)
-          } else {
-            console.log('Chip click:', response)
-          }
-        }
-      )
+      sendEvoClick(`div[data-role="chip"][data-value="${v}"]`, `chip-${v}`)
     },
-    []
+    [sendEvoClick]
   )
+
+  const onUndo = useCallback(() => sendEvoClick(EVO_BUTTON_SELECTORS.undo, 'undo'), [sendEvoClick])
+  const onRebet = useCallback(() => sendEvoClick(EVO_BUTTON_SELECTORS.rebet, 'rebet'), [sendEvoClick])
+  const onDouble = useCallback(() => sendEvoClick(EVO_BUTTON_SELECTORS.double, 'double'), [sendEvoClick])
+  const onTables = useCallback(() => sendEvoClick('[data-role="plus-table-button"]', 'tables'), [sendEvoClick])
   // border border-white/12 bg-[linear-gradient(180deg,rgba(8,15,29,0.96),rgba(11,19,35,0.92))]
   return (
     <section
@@ -382,6 +517,21 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
               )}>
               {spreadSelectionMode === 'within' ? 'Within' : 'Across'}
             </button>
+            {/* Auto-arm toggle */}
+            <button
+              type='button'
+              onClick={() => setAuto((v) => !v)}
+              title='Auto-arm when a KIM signal is detected'
+              className={cn(
+                'rounded-md border px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors',
+                auto
+                  ? 'border-violet-300/60 bg-violet-400/20 text-violet-100'
+                  : 'border-white/15 bg-white/5 text-slate-400 hover:text-slate-200'
+              )}>
+              Auto
+            </button>
+
+            {/* Arm toggle */}
             <button
               type='button'
               onClick={handleTrackingToggle}
@@ -391,7 +541,32 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
                   ? 'border-rose-100 bg-rose-500 text-white'
                   : 'border-rose-800/80 bg-rose-100/70 text-rose-800'
               )}>
-              <span className=' font-extrabold'>{isTracking ? 'Armed' : 'Arm'}</span>
+              <span className='font-extrabold'>{isTracking ? 'Armed' : 'Arm'}</span>
+            </button>
+
+            {/* Loaded toggle — executes v-board bets on actual Evolution table */}
+            <button
+              type='button'
+              onClick={() => setLoaded((v) => !v)}
+              title='Execute v-board bets on the Evolution table each betting window'
+              className={cn(
+                'relative rounded-md border px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors',
+                loaded
+                  ? 'border-emerald-300/60 bg-emerald-400/20 text-emerald-100'
+                  : 'border-white/15 bg-white/5 text-slate-400 hover:text-slate-200'
+              )}>
+              {loaded ? 'Loaded' : 'Load'}
+              {/* Bet-status badge */}
+              {loaded && betStatus !== 'idle' && (
+                <span
+                  className={cn(
+                    'absolute -right-1.5 -top-1.5 flex h-3 w-3 items-center justify-center rounded-full text-[7px] font-bold',
+                    betStatus === 'placing' && 'bg-amber-400 animate-pulse',
+                    betStatus === 'ok' && 'bg-emerald-400',
+                    betStatus === 'missed' && 'bg-rose-500'
+                  )}
+                />
+              )}
             </button>
           </div>
         </div>
@@ -420,10 +595,15 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
           </div>
 
           <div className='mt-4 grid grid-cols-[42px_1fr] gap-3'>
-            <div
+            <button
+              type='button'
+              disabled={!selectedChip}
+              title='Place zero bet on Evolution'
+              onClick={() => placeEvolutionBets([0])}
               className={cn(
-                'relative flex items-center justify-center rounded-2xl border text-lg font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
+                'relative flex items-center justify-center rounded-2xl border text-lg font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
                 getNumberTone(0),
+                selectedChip && 'cursor-pointer hover:border-white',
                 nextBet.zeroStake > 0 && 'ring-2 ring-emerald-300/75 ring-offset-2 ring-offset-slate-950',
                 latestWinningNumber === 0 && 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.55)]'
               )}>
@@ -440,7 +620,7 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
                   ) : null}
                 </>
               ) : null}
-            </div>
+            </button>
 
             <div className='space-y-2'>
               {BOARD_ROWS.map((row) => (
@@ -469,7 +649,7 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
                           if (interactiveQuadrant) {
                             setStartingQuadrant(interactiveQuadrant)
                             if (selectedChip) {
-                              placeEvolutionBets(interactiveQuadrant)
+                              placeEvolutionBets([...KIMS_ALGO_QUADRANTS[interactiveQuadrant]])
                             }
                           }
                         }}
@@ -543,89 +723,14 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips }:
           </div>
 
           <div className='mt-3'>
-            <div className='flex items-center gap-3'>
-              <button
-                type='button'
-                onClick={() => setShowChipSelector((v) => !v)}
-                className='text-[0.6rem] uppercase tracking-[0.22em] text-slate-500 hover:text-slate-300 transition-colors'>
-                {showChipSelector ? '▾ Chips' : '▸ Chips'}
-                {evolutionChips.length > 0 && !showChipSelector && (
-                  <span className='ml-1.5 text-emerald-400/70'>({evolutionChips.length})</span>
-                )}
-              </button>
-              <button
-                type='button'
-                onClick={() => {
-                  chrome.runtime.sendMessage(
-                    { type: 'CLICK_EVOLUTION_ELEMENT', selector: '[data-role="plus-table-button"]' },
-                    (response) => {
-                      if (chrome.runtime.lastError) {
-                        console.warn('Tables click failed:', chrome.runtime.lastError.message)
-                      } else {
-                        console.log('Tables click:', response)
-                      }
-                    }
-                  )
-                }}
-                className='text-[0.6rem] uppercase tracking-[0.22em] text-slate-500 hover:text-slate-300 transition-colors'>
-                Tables
-              </button>
-            </div>
-            {showChipSelector && (
-              <div className='mt-2 flex flex-wrap gap-2'>
-                {evolutionChips.length > 0 ? (
-                  evolutionChips.map((chipValue) => {
-                    const isSelected = selectedChip === chipValue
-                    const chipColor = getChipColor(chipValue)
-
-                    return (
-                      <button
-                        key={chipValue}
-                        type='button'
-                        disabled={isTracking}
-                        onClick={() => {
-                          setSelectedChip(chipValue)
-                          setBaseUnitInput(String(chipValue))
-                          setInputMode('base')
-                          chrome.runtime.sendMessage(
-                            {
-                              type: 'CLICK_EVOLUTION_ELEMENT',
-                              selector: `div[data-role="chip"][data-value="${chipValue}"]`
-                            },
-                            (response) => {
-                              if (chrome.runtime.lastError) {
-                                console.warn('Chip click failed:', chrome.runtime.lastError.message)
-                              } else {
-                                console.log('Chip click:', response)
-                              }
-                            }
-                          )
-                        }}
-                        title={`Set base unit to ${chipValue}`}
-                        className={cn(
-                          'relative flex h-10 w-10 items-center justify-center rounded-full border-2 text-[0.6rem] font-bold transition-all',
-                          'disabled:cursor-not-allowed disabled:opacity-40',
-                          isSelected ? 'scale-110 shadow-[0_0_8px_rgba(255,255,255,0.3)]' : 'hover:scale-105'
-                        )}
-                        style={{
-                          borderColor: chipColor,
-                          backgroundColor: isSelected ? chipColor : 'transparent',
-                          color: isSelected ? '#fff' : chipColor
-                        }}>
-                        {formatChipLabel(chipValue)}
-                      </button>
-                    )
-                  })
-                ) : (
-                  <p className='text-[0.58rem] text-slate-500 italic'>
-                    No chips detected — open an Evolution roulette table.
-                  </p>
-                )}
-              </div>
-            )}
-            <div>
-              <ChipStack chipsDetected={evolutionChips} onChipSelect={onChipSelect} />
-            </div>
+            <ChipStack
+              chipsDetected={evolutionChips}
+              onChipSelect={onChipSelect}
+              onUndo={onUndo}
+              onRebet={evolutionRebetVisible ? onRebet : undefined}
+              onDouble={onDouble}
+              onTables={onTables}
+            />
           </div>
           <div className='mt-4 grid gap-2 grid-cols-4'>
             <Stat>

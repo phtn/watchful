@@ -93,6 +93,45 @@ async function dispatchTrustedClickAt(tabId: number, x: number, y: number): Prom
   await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', { ...base, type: 'mouseReleased' })
 }
 
+/**
+ * Asks every content-script frame which chip is currently active in Evolution.
+ * Returns the data-value of the first frame that reports a match, or null when
+ * no frame can determine the selection state (graceful no-op).
+ */
+async function getEvolutionSelectedChip(tabId: number): Promise<number | null> {
+  let frames: chrome.webNavigation.GetAllFrameResultDetails[] | null = null
+  try {
+    frames = await chrome.webNavigation.getAllFrames({ tabId })
+  } catch {
+    frames = null
+  }
+
+  const framesToCheck = frames ?? ([] as chrome.webNavigation.GetAllFrameResultDetails[])
+
+  for (const frame of framesToCheck) {
+    try {
+      const response = await new Promise<{ value: number | null } | null>((resolve) => {
+        chrome.tabs.sendMessage(
+          tabId,
+          { type: 'EVO_GET_SELECTED_CHIP' },
+          { frameId: frame.frameId },
+          (resp) => {
+            if (chrome.runtime.lastError) {
+              resolve(null)
+            } else {
+              resolve(resp as { value: number | null } | null)
+            }
+          }
+        )
+      })
+      if (response?.value != null) return response.value
+    } catch {
+      // Frame has no content script — skip
+    }
+  }
+  return null
+}
+
 async function trustedClickBySelector(tabId: number, selector: string): Promise<TrustedClickResult> {
   try {
     await ensureDebuggerAttached(tabId)
@@ -286,7 +325,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
         const { chipValue, numbers } = message as { chipValue: number; numbers: number[] }
 
-        // First click the chip to select it
+        // Click the chip to select it in Evolution before placing any bets.
         const chipResult = await trustedClickBySelector(
           activeTab.id,
           `div[data-role="chip"][data-value="${chipValue}"]`
@@ -296,7 +335,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return
         }
 
-        await new Promise((r) => setTimeout(r, 100))
+        // Give Evolution's chip-select animation time to settle.
+        await new Promise((r) => setTimeout(r, 200))
+
+        // Verify the chip actually switched in Evolution's DOM before placing bets.
+        // If we can read the active chip and it doesn't match, retry the click once.
+        const activeChip = await getEvolutionSelectedChip(activeTab.id)
+        if (activeChip !== null && Math.abs(activeChip - chipValue) > 0.001) {
+          console.warn(
+            `[watchful-wind] Chip mismatch — expected ${chipValue}, Evolution shows ${activeChip}. Retrying click.`
+          )
+          await trustedClickBySelector(activeTab.id, `div[data-role="chip"][data-value="${chipValue}"]`)
+          await new Promise((r) => setTimeout(r, 200))
+        }
 
         const placed: number[] = []
         const missed: number[] = []
@@ -308,7 +359,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           } else {
             missed.push(num)
           }
-          await new Promise((r) => setTimeout(r, 60))
+          // 220 ms lets the chip-placement animation complete before the next click.
+          await new Promise((r) => setTimeout(r, 140))
         }
 
         sendResponse({ ok: placed.length > 0, placed, missed })

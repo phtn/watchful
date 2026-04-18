@@ -10,10 +10,12 @@ interface RouletteWorkspaceProps {
   status: PanelStatus
   stats: RouletteStoredData
   evolutionChips: number[]
+  evolutionRebetVisible: boolean
+  evolutionBettingOpen: boolean
   onReset: () => void
 }
 
-export function RouletteWorkspace({ status, stats, evolutionChips, onReset }: RouletteWorkspaceProps) {
+export function RouletteWorkspace({ status, stats, evolutionChips, evolutionRebetVisible, evolutionBettingOpen, onReset }: RouletteWorkspaceProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
   const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
   const [selectedStartingQuadrantNumbers, setSelectedStartingQuadrantNumbers] = useState<Set<number>>(new Set())
@@ -42,7 +44,7 @@ export function RouletteWorkspace({ status, stats, evolutionChips, onReset }: Ro
   return (
     <div className='space-y-2 pb-6 bg-[#282828]'>
       <RouletteHeader stats={stats} latestSpin={latestSpin} previewSpins={previewSpins} />
-      <RouletteVirtualBoard status={status} winningNumbers={winningNumbers} evolutionChips={evolutionChips} />
+      <RouletteVirtualBoard status={status} winningNumbers={winningNumbers} evolutionChips={evolutionChips} evolutionRebetVisible={evolutionRebetVisible} evolutionBettingOpen={evolutionBettingOpen} />
       <Analytics winningNumbers={winningNumbers} onReset={onReset} />
     </div>
   )
