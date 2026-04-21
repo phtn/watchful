@@ -35,14 +35,14 @@ export const RouletteHeader = ({ stats, latestSpin, previewSpins }: RouletteHead
             <p id='provider' className='font-line text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>
               {providerLabel}
             </p>
-            <h2 id='table-name' className='font-circ mt-3 text-[1.65rem] leading-none text-white'>
+            <h2 id='table-name' className='font-circ mt-3 text-lg leading-none text-white'>
               {tableName}
             </h2>
           </div>
           <div
             className={cn(
               `flex items-center justify-center font-medium text-xs text-center rounded-full border border-emerald-300/25 bg-emerald-300/10 h-16 w-auto aspect-square uppercase text-emerald-100 ${getNumberTone(latestSpin?.winningNumber)} border-3! border-white/15 shadow-inner`,
-              { 'text-2xl font-bold': stats.totalSpins > 0 }
+              { 'text-xl font-bold': stats.totalSpins > 0 }
             )}>
             {stats.totalSpins > 0 ? latestSpin?.winningNumber : 'Awaiting Spins'}
           </div>

@@ -482,12 +482,17 @@ export function createKimAlgoBetPlan(
   let numbers: number[]
 
   if (scatter) {
-    // Unique pool from all active quadrants, randomly sampled each round
-    const pool = [...new Set(quadrants.flatMap((q) => [...KIMS_ALGO_QUADRANTS[q]]))]
+    // Resolve overlaps with the same within/across spread logic, then shuffle
+    const resolved = quadrants.reduce<number[]>((placements, quadrant) => {
+      const r = resolveQuadrantPlacements(quadrant, placements, false, spreadSelectionMode, options.hotNumbers ?? [])
+      if (r.spreadApplied) spreadQuadrants.push(quadrant)
+      placements.push(...r.numbers)
+      return placements
+    }, [])
     numbers =
       options.scatterSeed !== undefined
-        ? seededShuffle(pool, options.scatterSeed)
-        : [...pool].sort(() => Math.random() - 0.5)
+        ? seededShuffle(resolved, options.scatterSeed)
+        : [...resolved].sort(() => Math.random() - 0.5)
   } else {
     numbers = quadrants.reduce<number[]>((placements, quadrant) => {
       const resolved = resolveQuadrantPlacements(

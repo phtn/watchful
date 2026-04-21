@@ -10,8 +10,8 @@ export function getNumberTone(value: number | undefined): string {
   }
 
   return RED_NUMBERS_SET.has(value)
-    ? 'border-[#b51b13] bg-[#b51b13] text-white'
-    : 'border-slate-200/15 bg-slate-950/78 text-slate-100'
+    ? 'border-[#89211d] bg-[#89211d] text-neutral-50'
+    : 'border-black/50 bg-black text-slate-200'
 }
 
 function getSourceLabel(status: PanelStatus): string {

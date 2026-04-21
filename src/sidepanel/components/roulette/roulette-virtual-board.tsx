@@ -441,12 +441,8 @@ export function RouletteVirtualBoard({
   const onTables = useCallback(() => sendEvoClick('[data-role="plus-table-button"]', 'tables'), [sendEvoClick])
   // border border-white/12 bg-[linear-gradient(180deg,rgba(8,15,29,0.96),rgba(11,19,35,0.92))]
   return (
-    <section
-      className={cn(
-        'overflow-hidden rounded-lg text-white shadow-[0_28px_90px_-42px_rgba(15,23,42,0.82)]',
-        cardClassName
-      )}>
-      <div className='flex items-start justify-between p-4 gap-2'>
+    <section className={cn('overflow-hidden rounded-lg text-white', cardClassName)}>
+      <div className='flex items-start justify-between'>
         <div className='space-y-1'>
           <p className='text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>KIM 3.6</p>
           {lastWinProfit !== null && (
@@ -457,8 +453,14 @@ export function RouletteVirtualBoard({
           )}
         </div>
         <div className='flex flex-col items-end gap-2'>
-          <div className='flex flex-wrap items-center justify-end gap-2'>
-            <div className='bg-zinc-900 border border-zinc-900 rounded-lg h-6 w-6 flex items-center justify-center'>
+          <div className='flex flex-wrap items-center justify-end gap-3 bg-zinc-900/70 py-3 px-4 rounded-lg shadow-inner'>
+            <div
+              className={cn(
+                'bg-zinc-900/70 border border-zinc-900/70 rounded-lg h-6 w-6 flex items-center justify-center',
+                {
+                  'bg-green-400/80 border-green-400/50 animate-pulse': signalFound && !isTracking
+                }
+              )}>
               <span
                 className={cn(`h-5 min-w-5 bg-no-repeat object-contain`, {
                   'animate-pulse': signalFound && !isTracking,
@@ -472,7 +474,23 @@ export function RouletteVirtualBoard({
 
             <button
               type='button'
+              title='Scatter: randomly sample slots from the active quadrant pool each round'
               onClick={() => setScatter((v) => !v)}
+              className={cn(
+                'h-5 w-5 bg-zinc-900/60 border border-zinc-900/60 backdrop-blur-2xl rounded-md flex items-center justify-center',
+                {
+                  'opacity-40 grayscale': !scatter
+                }
+              )}>
+              <span
+                className={`h-5 min-w-5 opacity-80`}
+                style={{
+                  backgroundImage: scatter ? 'url(./icons/gem-blue.svg)' : 'url(./icons/gem-silver.svg)',
+                  backgroundColor: 'transparent'
+                }}></span>
+            </button>
+            {/*<button
+              type='button'
               title='Scatter: randomly sample slots from the active quadrant pool each round'
               className={cn(
                 'rounded-sm border px-2 py-1 text-xs font-semibold uppercase tracking-widest transition-colors',
@@ -481,7 +499,7 @@ export function RouletteVirtualBoard({
                   : 'border-white/15 bg-white/5 text-slate-500 hover:text-slate-300'
               )}>
               Scatter
-            </button>
+            </button>*/}
 
             <div className='flex items-center'>
               <button
@@ -489,24 +507,27 @@ export function RouletteVirtualBoard({
                 onClick={() => setAllowOverlaps((current) => !current)}
                 disabled={scatter}
                 className={cn(
-                  'rounded-s-sm border px-2 py-1 text-xs font-semibold uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40',
-                  allowOverlaps
-                    ? 'border-orange-100/60 bg-orange-100/70 text-orange-950'
-                    : 'border-cyan-100/60 bg-cyan-100/70 text-cyan-950'
+                  'flex items-center justify-center h-7 w-8 disabled:cursor-not-allowed disabled:opacity-40'
                 )}>
-                {allowOverlaps ? 'Overlap' : 'Spread'}
+                <span
+                  className={cn('font-medium text-base leading-0 uppercase text-orange-100/70', {
+                    'text-cyan-100/70': allowOverlaps
+                  })}>
+                  {allowOverlaps ? 'O' : 'S'}
+                </span>
               </button>
+
               <button
                 type='button'
                 onClick={() => setSpreadSelectionMode((current) => (current === 'within' ? 'across' : 'within'))}
-                disabled={allowOverlaps || scatter}
+                disabled={allowOverlaps}
                 className={cn(
-                  'rounded-e-sm border border-l-0 px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-                  spreadSelectionMode === 'within'
-                    ? 'border-emerald-100/50 bg-emerald-300/12 text-emerald-100'
-                    : 'border-fuchsia-100/50 bg-fuchsia-300/12 text-fuchsia-100'
+                  'flex items-center justify-center h-7 w-8 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                  spreadSelectionMode === 'within' ? ' text-cyan-300/80' : ' text-fuchsia-300/80'
                 )}>
-                {spreadSelectionMode === 'within' ? 'Within' : 'Across'}
+                <span className='font-medium text-base leading-0 uppercase'>
+                  {spreadSelectionMode === 'within' ? 'W' : 'A'}
+                </span>
               </button>
             </div>
 
@@ -519,7 +540,11 @@ export function RouletteVirtualBoard({
                 className={cn(
                   'rounded-s-sm bg-white/5 border border-white/15 px-2 py-1 transition-colors',
                   ' font-medium text-xs uppercase tracking-widest text-slate-400 hover:text-slate-200',
-                  { 'border-white/80': isTracking, 'bg-rose-800/10 text-white': auto }
+                  {
+                    'border-white/80': isTracking,
+                    'bg-rose-800/10 text-white': auto,
+                    ' border-rose-300/60': auto && !isTracking
+                  }
                 )}>
                 a/t
               </button>
@@ -546,9 +571,9 @@ export function RouletteVirtualBoard({
                 loaded ? 'bg-emerald-400/0' : 'opacity-40 grayscale'
               )}>
               <span
-                className={` h-6 min-w-6`}
+                className={`h-5 min-w-5 bg-no-repeat object-contain`}
                 style={{
-                  backgroundImage: loaded ? 'url(./icons/coin-fill.svg)' : 'url(./icons/coin.svg)',
+                  backgroundImage: loaded ? 'url(./icons/loaded.svg)' : 'url(./icons/loaded.svg)',
                   backgroundColor: 'transparent'
                 }}></span>
               {/* Bet-status badge */}
@@ -580,9 +605,9 @@ export function RouletteVirtualBoard({
         </div>
       </div>
 
-      <div className='grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]'>
-        <div className='rounded-lg border border-neutral-300/30 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))] p-3'>
-          <div className='flex items-end justify-between gap-3'>
+      <div className='grid gap-2 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]'>
+        <div className='bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]'>
+          <div className='hidden _flex items-end justify-between gap-3'>
             <div>
               <div id='acc-value' className='font-bold italic'>
                 {accWinnings > 0 ? `+${fmtAmt(accWinnings)}` : fmtAmt(accWinnings)}
@@ -602,20 +627,20 @@ export function RouletteVirtualBoard({
             </div>
           </div>
 
-          <div className='mt-4 grid grid-cols-[42px_1fr] gap-3'>
+          <div className='mt-4 grid grid-cols-[42px_1fr] rounded-s-lg rounded-e-sm gap-0.5 bg-white/40'>
             <button
               type='button'
               disabled={!selectedChip}
               title='Place zero bet on Evolution'
               onClick={() => placeEvolutionBets([0])}
               className={cn(
-                'relative flex items-center justify-center rounded-2xl border text-lg font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
+                'relative flex items-center justify-center rounded-s-lg rounded-e-sm border font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
                 getNumberTone(0),
                 selectedChip && 'cursor-pointer hover:border-white',
                 nextBet.zeroStake > 0 && 'ring-2 ring-emerald-300/75 ring-offset-2 ring-offset-slate-950',
                 latestWinningNumber === 0 && 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.55)]'
               )}>
-              0
+              <span className='text-lg'>0</span>
               {nextBet.zeroStake > 0 ? (
                 <>
                   <span className='absolute bottom-1 rounded-full bg-emerald-300 px-1.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-[0.14em] text-slate-950'>
@@ -630,9 +655,9 @@ export function RouletteVirtualBoard({
               ) : null}
             </button>
 
-            <div className='space-y-2'>
+            <div className='space-y-0.75 py-1'>
               {BOARD_ROWS.map((row) => (
-                <div key={row.join('-')} className='grid grid-cols-12 gap-1 space-y-1'>
+                <div key={row.join('-')} className='grid grid-cols-12 w-fit'>
                   {row.map((value) => {
                     const placementCount = placementMap.get(value) ?? 0
                     const effectiveMultiplier = getEffectiveStakeMultiplier(nextBet.unitStake, baseUnit, placementCount)
@@ -680,14 +705,15 @@ export function RouletteVirtualBoard({
                             : undefined
                         }
                         className={cn(
-                          'relative flex h-10 w-auto aspect-square items-center justify-center rounded-xl border text-sm font-semibold _shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
+                          'mr-0.75 relative flex h-12 w-12 aspect-square items-center justify-center rounded-xs border-[0.5px] text-sm font-semibold _shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
                           getNumberTone(value),
-                          isActive && 'ring-2 ring-emerald-300/75 ring-offset-1 ring-offset-slate-950',
+                          isActive &&
+                            'ring-2 ring-emerald-500 border-emerald-400 ring-offset-0 ring-offset-emerald-500',
                           isActive && hotRank && nextBet.round >= 4 && 'animate-pulse',
                           isLatest && 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.55)]',
-                          isHoveredQuadrantMember && 'ring-2 ring-white/70 ring-offset-1 ring-offset-slate-950',
-                          isStartingQuadrantTrigger && 'cursor-pointer hover:border-white',
-                          isSelectedStartingQuadrant && 'border-white/90 shadow-[0_0_0_1px_rgba(255,255,255,0.22)]'
+                          isHoveredQuadrantMember && 'ring-2 ring-white/80 ring-offset-0 ring-offset-slate-950',
+                          isStartingQuadrantTrigger && 'cursor-pointer',
+                          isSelectedStartingQuadrant && 'border-white/30 shadow-[0_0_0_1px_rgba(255,255,255,0.22)]'
                         )}>
                         <span className='text-base font-semibold drop-shadow-xs'>{value}</span>
                         {isActive && effectiveMultiplier > 1 ? (
@@ -705,7 +731,7 @@ export function RouletteVirtualBoard({
                         {hotRank ? (
                           <span
                             className={cn(
-                              'absolute -bottom-px -left-px flex h-3 w-3 items-center justify-center rounded-xs rounded-bl-lg text-[7px] font-bold shadow-sm',
+                              'absolute -bottom-px -left-px flex h-3 w-3 items-center justify-center rounded-xs rounded-bl-md text-[7px] font-bold shadow-sm',
                               hotRank === 1 && 'bg-amber-400 text-amber-900',
                               hotRank === 2 && 'bg-zinc-300 text-zinc-700',
                               hotRank === 3 && 'bg-orange-600 text-orange-100',
@@ -730,7 +756,7 @@ export function RouletteVirtualBoard({
             ) : null}
           </div>
 
-          <div className='mt-3'>
+          <div className='mt-2'>
             <ChipStack
               chipsDetected={evolutionChips}
               onChipSelect={onChipSelect}
@@ -740,7 +766,7 @@ export function RouletteVirtualBoard({
               onTables={onTables}
             />
           </div>
-          <div className='mt-4 grid gap-2 grid-cols-4'>
+          <div className='mt-2 grid grid-cols-4 px-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>round</p>
               <p className='mt-2 text-lg font-semibold text-white'>{nextBet.round}</p>
@@ -781,7 +807,7 @@ export function RouletteVirtualBoard({
             </Stat>
           </div>
 
-          <div className='grid grid-cols-5 mt-2 gap-2'>
+          <div className='grid grid-cols-5 mt-1 px-1 pb-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Next</p>
               <p className='mt-2 text-lg font-semibold text-white'>{fmtAmt(nextBet.totalStake)}</p>
