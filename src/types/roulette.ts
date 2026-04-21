@@ -52,6 +52,8 @@ export interface EvolutionRouletteSpinResult extends RouletteSpinResultBase {
   code: string
   winSpots: Record<string, unknown>
   resultNumbers: number[]
+  /** Display name read from [data-role="table-name"] in the Evolution iframe. */
+  tableName?: string
 }
 
 export interface PragmaticPlayRouletteSpinResult extends RouletteSpinResultBase {

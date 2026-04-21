@@ -803,6 +803,9 @@ function parseRouletteResult(payload: InterceptedNetworkPayload): RouletteSpinRe
     .map((entry) => toNumber(entry.number))
     .filter((entry): entry is number => entry !== undefined && Number.isInteger(entry) && entry >= 0 && entry <= 36)
 
+  // Read the table display name from the Evolution UI if available.
+  const tableName = deepQuery(document, '[data-role="table-name"]')?.textContent?.trim() || undefined
+
   return {
     id: providerData.id,
     provider: 'stake',
@@ -815,6 +818,7 @@ function parseRouletteResult(payload: InterceptedNetworkPayload): RouletteSpinRe
     winSpots: providerData.args.winSpots,
     resultNumbers,
     winningNumber,
+    tableName,
     timestamp: parseTimestamp(providerData.args.timestamp) ?? providerData.time ?? payload.timestamp ?? Date.now(),
     updatedAt: providerData.args.timestamp,
     url: window.location.href
@@ -1119,6 +1123,16 @@ function elementCenter(el: HTMLElement): { x: number; y: number } | null {
 }
 
 function reportCoordsToBackground(requestId: string, x: number, y: number, selector: string): void {
+  // chrome.runtime.id is undefined when the extension context has been invalidated
+  // (e.g. after an extension reload without a page refresh).  Attempting to call
+  // sendMessage in that state throws "Extension context invalidated" and the
+  // background never receives coords, so all trusted clicks time out.
+  if (!chrome.runtime?.id) {
+    console.warn(
+      '[watchful-wind] Extension context invalidated — reload the page to restore click automation.'
+    )
+    return
+  }
   try {
     chrome.runtime.sendMessage({
       type: 'EVO_COORDS_FOUND',

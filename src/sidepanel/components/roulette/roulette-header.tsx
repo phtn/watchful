@@ -8,15 +8,36 @@ interface RouletteHeaderProps {
   previewSpins: number[] | readonly number[]
 }
 
+function getProviderLabel(spin: RouletteSpinResult | null): string {
+  if (!spin) return 'Provider'
+  return spin.source === 'evolution' ? 'Evolution' : 'Pragmatic Play'
+}
+
+function getTableName(spin: RouletteSpinResult | null): string {
+  if (!spin) return 'Table Name'
+  if (spin.source === 'evolution') {
+    // Prefer the DOM-scraped display name; fall back to the API description field.
+    return spin.tableName || spin.description || 'Evolution Roulette'
+  }
+  return 'Speed Roulette'
+}
+
 export const RouletteHeader = ({ stats, latestSpin, previewSpins }: RouletteHeaderProps) => {
+  const providerLabel = getProviderLabel(latestSpin)
+  const tableName = getTableName(latestSpin)
+
   return (
     <section className='relative overflow-hidden rounded-[18px] border border-white/12 bg-[#1F2020] p-5 text-white'>
       <div className='absolute bottom-[-35%] right-[-16%] h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(239,68,68,0.28),transparent_68%)] blur-2xl' />
       <div className='relative'>
         <div className='flex items-start justify-between gap-4'>
           <div className='w-full'>
-            <p className='font-line text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>Table Games</p>
-            <h2 className='font-circ mt-3 text-[1.65rem] leading-none text-white'>Roulette Atelier</h2>
+            <p id='provider' className='font-line text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>
+              {providerLabel}
+            </p>
+            <h2 id='table-name' className='font-circ mt-3 text-[1.65rem] leading-none text-white'>
+              {tableName}
+            </h2>
           </div>
           <div
             className={cn(

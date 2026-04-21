@@ -3,7 +3,7 @@ import {
   BOARD_ROWS,
   KIMS_ALGO_QUADRANTS,
   createKimAlgoBetPlan,
-  getKimAlgoNetProfit,
+  getKimAlgoGrossReturn,
   getKimQuadrantsContainingNumber,
   getKimQuadrantsContainingPair,
   resolveKimAutoStartingQuadrant,
@@ -100,14 +100,20 @@ function StepTone({ value }: { value: string }) {
   )
 }
 
-
-export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, evolutionRebetVisible, evolutionBettingOpen }: RouletteVirtualBoardProps) {
+export function RouletteVirtualBoard({
+  status,
+  winningNumbers,
+  evolutionChips,
+  evolutionRebetVisible,
+  evolutionBettingOpen
+}: RouletteVirtualBoardProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
   const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
   const [baseUnitInput, setBaseUnitInput] = useState('1')
   const [isTracking, setIsTracking] = useState(false)
   const [allowOverlaps, setAllowOverlaps] = useState(false)
   const [spreadSelectionMode, setSpreadSelectionMode] = useState<KimSpreadSelectionMode>('within')
+  const [scatter, setScatter] = useState(false)
   const [trackedWinningNumbers, setTrackedWinningNumbers] = useState<number[]>([])
   const [lastConsumedIndex, setLastConsumedIndex] = useState(winningNumbers.length)
   const [winStreak, setWinStreak] = useState(0)
@@ -120,6 +126,9 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
   const [auto, setAuto] = useState(false)
   // Loaded: auto-execute v-board bets on the actual Evolution table each betting window
   const [loaded, setLoaded] = useState(false)
+  // Milliseconds to wait after evolutionBettingOpen fires before sending bets.
+  // Evolution's DOM takes a moment to render bet spots after the window signal fires.
+  const [betDelay, setBetDelay] = useState(600)
   // Bet verification feedback: 'idle' | 'placing' | 'ok' | 'missed'
   const [betStatus, setBetStatus] = useState<'idle' | 'placing' | 'ok' | 'missed'>('idle')
 
@@ -128,12 +137,8 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
   const prevSignalFoundRef = useRef(false)
   // Guard: tracks the simulation step count for which we last placed bets.
   // -1 means no bets placed yet for the current armed session.
+  // This is the sole deduplication mechanism — one bet placement per step.
   const lastBetStepRef = useRef(-1)
-  // Fresh-open guard: prevents placing bets into an already-open betting window
-  // at the moment the board is armed. Only cleared once we see a genuine
-  // false → true transition of evolutionBettingOpen after arming.
-  const prevBettingOpenRef = useRef(false)
-  const firstOpenSeenAfterArmRef = useRef(false)
 
   const parsedInput = Number.parseFloat(baseUnitInput)
   const baseUnit =
@@ -166,18 +171,21 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
         baseUnit,
         allowOverlaps,
         spreadSelectionMode,
-        hotNumbers
+        hotNumbers,
+        scatter
       }),
-    [allowOverlaps, baseUnit, hotNumbers, spreadSelectionMode, startingQuadrant, trackedWinningNumbers]
+    [allowOverlaps, baseUnit, hotNumbers, scatter, spreadSelectionMode, startingQuadrant, trackedWinningNumbers]
   )
   const nextBet = useMemo(
     () =>
       createKimAlgoBetPlan(simulation.finalState.nextRound, simulation.finalState.nextQuadrants, baseUnit, {
         allowOverlaps,
         spreadSelectionMode,
-        hotNumbers
+        hotNumbers,
+        scatter,
+        scatterSeed: trackedWinningNumbers.length
       }),
-    [allowOverlaps, baseUnit, hotNumbers, simulation, spreadSelectionMode]
+    [allowOverlaps, baseUnit, hotNumbers, scatter, simulation, spreadSelectionMode, trackedWinningNumbers.length]
   )
   const roundMultiplier = getEffectiveStakeMultiplier(nextBet.unitStake, baseUnit, 1)
   const placementMap = useMemo(() => getPlacementMap(nextBet.numbers), [nextBet])
@@ -247,7 +255,15 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
         if (step.sessionOutcome === 'reset_after_max_loss') streakReset = true
       } else {
         streakDelta += 1
-        const profit = getKimAlgoNetProfit(step.bet, step.landedNumber)
+        // Sum stakes from the current session start up to and including this win step
+        const stepIdx = step.spinIndex - 1
+        let sessionStake = step.bet.totalStake
+        for (let i = stepIdx - 1; i >= 0; i--) {
+          const prevStep = simulation.steps[i]
+          if (prevStep.sessionOutcome !== 'continue') break
+          sessionStake += prevStep.bet.totalStake
+        }
+        const profit = getKimAlgoGrossReturn(step.bet, step.landedNumber) - sessionStake
         winningsGained += profit
         latestProfit = profit
       }
@@ -288,118 +304,77 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
   }, [auto, signalFound, isTracking, autoStartingQuadrant, baseUnit, winningNumbers.length])
 
   // ── Loaded: auto-execute bets once per simulation step ───────────────────
-  // Reset both guards when arming/disarming. Capture the current betting-window
-  // state so the transition detector starts from the right baseline.
+  // Reset the step guard on every arm/disarm so each new session starts fresh.
   useEffect(() => {
     lastBetStepRef.current = -1
-    firstOpenSeenAfterArmRef.current = false
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    prevBettingOpenRef.current = evolutionBettingOpen  // snapshot at arm time
   }, [isTracking])
-
-  // Detect a genuine false → true betting-window opening while armed.
-  // This fires on every evolutionBettingOpen change and keeps prevBettingOpenRef in sync.
-  useEffect(() => {
-    const wasOpen = prevBettingOpenRef.current
-    prevBettingOpenRef.current = evolutionBettingOpen
-    if (!wasOpen && evolutionBettingOpen && isTracking) {
-      firstOpenSeenAfterArmRef.current = true
-    }
-  }, [evolutionBettingOpen, isTracking])
 
   useEffect(() => {
     if (!loaded || !isTracking || !evolutionBettingOpen) return
-    if (!firstOpenSeenAfterArmRef.current) return  // wait for a fresh betting-window open after arming
-    if (!selectedChip) return                      // no chip selected yet
-    if (nextBet.numbers.length === 0) return       // nothing to bet
+    if (!selectedChip) return // no chip selected yet
+    if (nextBet.numbers.length === 0) return // nothing to bet
 
     const currentStep = simulation.steps.length
-    if (lastBetStepRef.current === currentStep) return  // already bet for this step
-    lastBetStepRef.current = currentStep
+    if (lastBetStepRef.current === currentStep) return // already bet for this step
+    lastBetStepRef.current = currentStep // claim the step before the delay fires
 
     setBetStatus('placing')
 
-    // Build the effective placement map — identical to placementMap but with 0 added
-    // (count = 1) when the round calls for a zero hedge (rounds 4 and 5).
-    // Zero lives in nextBet.zeroStake, NOT in nextBet.numbers, so it would otherwise
-    // be silently skipped.
+    // Snapshot everything needed inside the closure so the delayed callback
+    // uses the values from *this* render, not a potentially-stale later one.
     const effectivePlacementMap = new Map(placementMap)
-    if (nextBet.zeroStake > 0) {
-      effectivePlacementMap.set(0, 1)
-    }
+    if (nextBet.zeroStake > 0) effectivePlacementMap.set(0, 1)
 
-    // Expand the numbers array: each unique slot is clicked (placementCount × roundMultiplier) times.
-    // placementCount > 1 happens in overlap mode where a slot falls in multiple active quadrants.
-    // roundMultiplier handles the KIM progressive doubling (rounds 3→2×, 4→4×, 5→8×).
     const baseNumbers: number[] = []
     for (const [num, count] of effectivePlacementMap) {
-      for (let i = 0; i < count * roundMultiplier; i++) {
-        baseNumbers.push(num)
-      }
+      for (let i = 0; i < count; i++) baseNumbers.push(num)
     }
 
-    // ── Chip-level upgrade ────────────────────────────────────────────────────
-    // If every slot's total value (clicks × chipValue) is evenly divisible by
-    // the next chip level, upgrade to that chip and reduce click counts accordingly.
-    // This avoids hammering a slot multiple times when a single higher-value click suffices.
-    const sortedChips = [...evolutionChips].sort((a, b) => a - b)
-    const chipIdx = sortedChips.findIndex((c) => c === selectedChip)
-    const nextChipValue = chipIdx >= 0 && chipIdx < sortedChips.length - 1 ? sortedChips[chipIdx + 1] : null
-
-    let chipToUse = selectedChip
-    let numbersToClick = baseNumbers
-
-    if (nextChipValue !== null) {
-      const canUpgrade = [...effectivePlacementMap.entries()].every(
-        ([, count]) => (count * roundMultiplier * selectedChip) % nextChipValue === 0
-      )
-      if (canUpgrade) {
-        chipToUse = nextChipValue
-        numbersToClick = []
-        for (const [num, count] of effectivePlacementMap) {
-          const clicks = (count * roundMultiplier * selectedChip) / nextChipValue
-          for (let i = 0; i < clicks; i++) numbersToClick.push(num)
-        }
-        // Select the upgraded chip on the virtual board — this updates state AND
-        // fires sendEvoClick so Evolution's board switches to the new chip value
-        // before PLACE_EVOLUTION_BETS runs its own chip click.
-        onChipSelect(nextChipValue)()
-        console.log(`[Load] ↑ Chip upgraded ${selectedChip} → ${nextChipValue}`)
-      }
-    }
+    const doubleCount = roundMultiplier > 1 ? Math.log2(roundMultiplier) : 0
+    const chip = selectedChip
+    const round = nextBet.round
+    const multiplier = roundMultiplier
+    const effectiveDelay = betDelay + (round === 1 ? 3000 : 2000)
 
     console.log(
-      `[Load] Placing bets — round ${nextBet.round}, ${roundMultiplier}x, chip ${chipToUse}, ${numbersToClick.length} clicks`,
-      numbersToClick
+      `[Load] Scheduling bets in ${effectiveDelay}ms — round ${round}, ${multiplier}x (${doubleCount} doubles), chip ${chip}, ${baseNumbers.length} slot clicks`,
+      baseNumbers
     )
 
-    chrome.runtime.sendMessage(
-      { type: 'PLACE_EVOLUTION_BETS', chipValue: chipToUse, numbers: numbersToClick },
-      (response) => {
-        const missed: number[] = response?.missed ?? []
-        const placed: number[] = response?.placed ?? []
-        const ok = !chrome.runtime.lastError && response?.ok && missed.length === 0
+    // Delay the actual placement so Evolution's bet-spot DOM has time to render
+    // after the betting-window signal fires. The deduplication guard above is
+    // already set, so re-renders during the delay won't cause a double-send.
+    const timer = setTimeout(() => {
+      chrome.runtime.sendMessage(
+        { type: 'PLACE_EVOLUTION_BETS', chipValue: chip, numbers: baseNumbers, doubleCount },
+        (response) => {
+          const missed: number[] = response?.missed ?? []
+          const placed: number[] = response?.placed ?? []
+          const ok = !chrome.runtime.lastError && response?.ok && missed.length === 0
 
-        setBetStatus(ok ? 'ok' : 'missed')
-        setTimeout(() => setBetStatus('idle'), 4000)
+          setBetStatus(ok ? 'ok' : 'missed')
+          setTimeout(() => setBetStatus('idle'), 4000)
 
-        if (ok) {
-          console.log(
-            `[Load] ✓ Verified — ${placed.length}/${numbersToClick.length} placed`,
-            `round ${nextBet.round} (${roundMultiplier}x, chip ${chipToUse})`
-          )
-        } else {
-          console.warn(
-            `[Load] ⚠ Mismatch — placed ${placed.length}/${numbersToClick.length}`,
-            { missed, error: chrome.runtime.lastError?.message }
-          )
+          if (ok) {
+            console.log(
+              `[Load] ✓ placed ${placed.length}/${baseNumbers.length}, ${response?.doublesApplied?.length ?? 0}/${doubleCount} doubles — round ${round} (${multiplier}x, chip ${chip})`
+            )
+          } else {
+            const runtimeErr = chrome.runtime.lastError?.message ?? 'none'
+            const missedStr = missed.length ? missed.join(', ') : 'none'
+            console.warn(
+              `[Load] ⚠ placed ${placed.length}/${baseNumbers.length} — missed: [${missedStr}] | runtime error: ${runtimeErr} | round ${round} (chip ${chip})`
+            )
+          }
         }
-      }
-    )
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      )
+    }, effectiveDelay)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evolutionBettingOpen, loaded, isTracking, selectedChip, simulation.steps.length])
-  // ^ placementMap/roundMultiplier/nextBet intentionally omitted from deps —
-  //   they are read from the closure at fire time. The primary triggers are:
+  // ^ placementMap/roundMultiplier/nextBet/betDelay intentionally omitted from deps —
+  //   they are snapshotted into locals at fire time. The primary triggers are:
   //   • evolutionBettingOpen  — window opens for a new round
   //   • simulation.steps.length — a new round has been logged (succeeding rounds)
 
@@ -436,26 +411,28 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
   const winAmount = 36 * nextBet.unitStake
 
   const sendEvoClick = useCallback((selector: string, label: string) => {
-    chrome.runtime.sendMessage(
-      { type: 'CLICK_EVOLUTION_ELEMENT', selector },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn(`[evo] ${label} click failed:`, chrome.runtime.lastError.message)
-        } else {
-          console.log(`[evo] ${label} click:`, response)
-        }
+    chrome.runtime.sendMessage({ type: 'CLICK_EVOLUTION_ELEMENT', selector }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn(`[evo] ${label} click failed:`, chrome.runtime.lastError.message)
+      } else {
+        console.log(`[evo] ${label} click:`, response)
       }
-    )
+    })
   }, [])
 
   const onChipSelect = useCallback(
     (v: number) => () => {
       setSelectedChip(v)
-      setBaseUnitInput(String(v))
-      setInputMode('base')
+      // While armed, keep the base unit locked to its configured value so the
+      // KIM algorithm's multiplier math stays correct.  Only sync the input field
+      // when the board is disarmed.
+      if (!isTracking) {
+        setBaseUnitInput(String(v))
+        setInputMode('base')
+      }
       sendEvoClick(`div[data-role="chip"][data-value="${v}"]`, `chip-${v}`)
     },
-    [sendEvoClick]
+    [sendEvoClick, isTracking]
   )
 
   const onUndo = useCallback(() => sendEvoClick(EVO_BUTTON_SELECTORS.undo, 'undo'), [sendEvoClick])
@@ -471,78 +448,93 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
       )}>
       <div className='flex items-start justify-between p-4 gap-2'>
         <div className='space-y-1'>
-          <p className='text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>
-            KIM VR &middot; {getSourceStatus(status)}
-          </p>
+          <p className='text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>KIM 3.6</p>
           {lastWinProfit !== null && (
             <p className='font-semibold text-lg italic uppercase text-emerald-100'>
               <span className='-tracking-widest'>Snatched</span>{' '}
-              <span className='font-bold text-amber-300'>+{fmtAmt(lastWinProfit)}</span>
+              <span className='font-extrabold text-amber-300'>+{fmtAmt(lastWinProfit)}</span>
             </p>
           )}
         </div>
         <div className='flex flex-col items-end gap-2'>
-          <div className='flex flex-wrap justify-end gap-2'>
-            {signalFound && !isTracking && (
-              <span className='relative flex items-center justify-center gap-1.5 rounded-md border border-orange-300/40 bg-orange-300/10 px-2 py-1 text-xs font-medium uppercase tracking-wide text-orange-100'>
-                <span className='relative flex items-center justify-center h-1.5 w-1.5'>
-                  {/*<span className='absolute h-1.5 w-1.5 animate-ping rounded-full text-orange-300'>⏺</span>*/}
-                  <span className='absolute h-1.5 w-1.5 rounded-full bg-orange-400' />
-                  <span className='absolute h-1.5 w-1.5 rounded-full bg-orange-200 animate-ping' />
-                </span>
-                SIGNAL-
-                {signalQuadrants.map((q) => q.toUpperCase()).join('/')}
-              </span>
-            )}
+          <div className='flex flex-wrap items-center justify-end gap-2'>
+            <div className='bg-zinc-900 border border-zinc-900 rounded-lg h-6 w-6 flex items-center justify-center'>
+              <span
+                className={cn(`h-5 min-w-5 bg-no-repeat object-contain`, {
+                  'animate-pulse': signalFound && !isTracking,
+                  'grayscale opacity-30': !signalFound
+                })}
+                style={{
+                  backgroundImage: 'url(./icons/gem.svg)',
+                  backgroundColor: 'transparent'
+                }}></span>
+            </div>
+
             <button
               type='button'
-              onClick={() => setAllowOverlaps((current) => !current)}
+              onClick={() => setScatter((v) => !v)}
+              title='Scatter: randomly sample slots from the active quadrant pool each round'
               className={cn(
-                'rounded-md border px-2 py-1 text-xs font-medium uppercase tracking-widest',
-                allowOverlaps
-                  ? 'border-amber-300/35 bg-amber-300/12 text-amber-100'
-                  : 'border-cyan-300/35 bg-cyan-300/12 text-cyan-100'
+                'rounded-sm border px-2 py-1 text-xs font-semibold uppercase tracking-widest transition-colors',
+                scatter
+                  ? 'border-violet-300/60 bg-violet-300/20 text-violet-200'
+                  : 'border-white/15 bg-white/5 text-slate-500 hover:text-slate-300'
               )}>
-              {allowOverlaps ? 'Overlap' : 'Spread'}
-            </button>
-            <button
-              type='button'
-              onClick={() => setSpreadSelectionMode((current) => (current === 'within' ? 'across' : 'within'))}
-              disabled={allowOverlaps}
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-                spreadSelectionMode === 'within'
-                  ? 'border-emerald-300/35 bg-emerald-300/12 text-emerald-100'
-                  : 'border-fuchsia-300/35 bg-fuchsia-300/12 text-fuchsia-100'
-              )}>
-              {spreadSelectionMode === 'within' ? 'Within' : 'Across'}
-            </button>
-            {/* Auto-arm toggle */}
-            <button
-              type='button'
-              onClick={() => setAuto((v) => !v)}
-              title='Auto-arm when a KIM signal is detected'
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors',
-                auto
-                  ? 'border-violet-300/60 bg-violet-400/20 text-violet-100'
-                  : 'border-white/15 bg-white/5 text-slate-400 hover:text-slate-200'
-              )}>
-              Auto
+              Scatter
             </button>
 
-            {/* Arm toggle */}
-            <button
-              type='button'
-              onClick={handleTrackingToggle}
-              className={cn(
-                'rounded-md min-w-24 border px-2 py-1 text-xs uppercase tracking-widest transition-colors drop-shadow-xs',
-                isTracking
-                  ? 'border-rose-100 bg-rose-500 text-white'
-                  : 'border-rose-800/80 bg-rose-100/70 text-rose-800'
-              )}>
-              <span className='font-extrabold'>{isTracking ? 'Armed' : 'Arm'}</span>
-            </button>
+            <div className='flex items-center'>
+              <button
+                type='button'
+                onClick={() => setAllowOverlaps((current) => !current)}
+                disabled={scatter}
+                className={cn(
+                  'rounded-s-sm border px-2 py-1 text-xs font-semibold uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40',
+                  allowOverlaps
+                    ? 'border-orange-100/60 bg-orange-100/70 text-orange-950'
+                    : 'border-cyan-100/60 bg-cyan-100/70 text-cyan-950'
+                )}>
+                {allowOverlaps ? 'Overlap' : 'Spread'}
+              </button>
+              <button
+                type='button'
+                onClick={() => setSpreadSelectionMode((current) => (current === 'within' ? 'across' : 'within'))}
+                disabled={allowOverlaps || scatter}
+                className={cn(
+                  'rounded-e-sm border border-l-0 px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                  spreadSelectionMode === 'within'
+                    ? 'border-emerald-100/50 bg-emerald-300/12 text-emerald-100'
+                    : 'border-fuchsia-100/50 bg-fuchsia-300/12 text-fuchsia-100'
+                )}>
+                {spreadSelectionMode === 'within' ? 'Within' : 'Across'}
+              </button>
+            </div>
+
+            {/* Auto-arm toggle */}
+            <div className='flex items-center'>
+              <button
+                type='button'
+                onClick={() => setAuto((v) => !v)}
+                title='Auto-arm when a KIM signal is detected'
+                className={cn(
+                  'rounded-s-sm bg-white/5 border border-white/15 px-2 py-1 transition-colors',
+                  ' font-medium text-xs uppercase tracking-widest text-slate-400 hover:text-slate-200',
+                  { 'border-white/80': isTracking, 'bg-rose-800/10 text-white': auto }
+                )}>
+                a/t
+              </button>
+
+              {/* Arm toggle */}
+              <button
+                type='button'
+                onClick={handleTrackingToggle}
+                className={cn(
+                  'rounded-e-sm min-w-20 border border-l-0 px-2 py-1 text-xs uppercase tracking-wider transition-colors drop-shadow-xs',
+                  isTracking ? 'border-rose-100 bg-rose-500 text-white' : 'border-white/15 bg-rose-100/70 text-rose-800'
+                )}>
+                <span className='font-extrabold'>{isTracking ? 'Armed' : 'Arm'}</span>
+              </button>
+            </div>
 
             {/* Loaded toggle — executes v-board bets on actual Evolution table */}
             <button
@@ -550,12 +542,15 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
               onClick={() => setLoaded((v) => !v)}
               title='Execute v-board bets on the Evolution table each betting window'
               className={cn(
-                'relative rounded-md border px-2 py-1 text-xs font-medium uppercase tracking-widest transition-colors',
-                loaded
-                  ? 'border-emerald-300/60 bg-emerald-400/20 text-emerald-100'
-                  : 'border-white/15 bg-white/5 text-slate-400 hover:text-slate-200'
+                'relative inline-flex items-center justify-center',
+                loaded ? 'bg-emerald-400/0' : 'opacity-40 grayscale'
               )}>
-              {loaded ? 'Loaded' : 'Load'}
+              <span
+                className={` h-6 min-w-6`}
+                style={{
+                  backgroundImage: loaded ? 'url(./icons/coin-fill.svg)' : 'url(./icons/coin.svg)',
+                  backgroundColor: 'transparent'
+                }}></span>
               {/* Bet-status badge */}
               {loaded && betStatus !== 'idle' && (
                 <span
@@ -568,6 +563,19 @@ export function RouletteVirtualBoard({ status, winningNumbers, evolutionChips, e
                 />
               )}
             </button>
+
+            {/* Bet placement delay — ms to wait after betting window opens before clicking */}
+            {false && (
+              <input
+                type='number'
+                min='0'
+                step='100'
+                value={betDelay}
+                onChange={(e) => setBetDelay(Math.max(0, Number(e.target.value)))}
+                title='Delay (ms) before placing bets after betting window opens'
+                className='w-16 rounded-sm bg-white/5 border border-white/10 px-1.5 py-1 text-xs text-slate-300 text-center outline-none'
+              />
+            )}
           </div>
         </div>
       </div>

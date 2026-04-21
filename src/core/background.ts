@@ -111,18 +111,13 @@ async function getEvolutionSelectedChip(tabId: number): Promise<number | null> {
   for (const frame of framesToCheck) {
     try {
       const response = await new Promise<{ value: number | null } | null>((resolve) => {
-        chrome.tabs.sendMessage(
-          tabId,
-          { type: 'EVO_GET_SELECTED_CHIP' },
-          { frameId: frame.frameId },
-          (resp) => {
-            if (chrome.runtime.lastError) {
-              resolve(null)
-            } else {
-              resolve(resp as { value: number | null } | null)
-            }
+        chrome.tabs.sendMessage(tabId, { type: 'EVO_GET_SELECTED_CHIP' }, { frameId: frame.frameId }, (resp) => {
+          if (chrome.runtime.lastError) {
+            resolve(null)
+          } else {
+            resolve(resp as { value: number | null } | null)
           }
-        )
+        })
       })
       if (response?.value != null) return response.value
     } catch {
@@ -323,34 +318,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return
         }
 
-        const { chipValue, numbers } = message as { chipValue: number; numbers: number[] }
-
-        // Click the chip to select it in Evolution before placing any bets.
-        const chipResult = await trustedClickBySelector(
-          activeTab.id,
-          `div[data-role="chip"][data-value="${chipValue}"]`
-        )
-        if (!chipResult.ok) {
-          sendResponse({ ok: false, error: `Chip selection failed: ${chipResult.error}`, placed: [], missed: numbers })
-          return
-        }
-
-        // Give Evolution's chip-select animation time to settle.
-        await new Promise((r) => setTimeout(r, 200))
-
-        // Verify the chip actually switched in Evolution's DOM before placing bets.
-        // If we can read the active chip and it doesn't match, retry the click once.
-        const activeChip = await getEvolutionSelectedChip(activeTab.id)
-        if (activeChip !== null && Math.abs(activeChip - chipValue) > 0.001) {
-          console.warn(
-            `[watchful-wind] Chip mismatch — expected ${chipValue}, Evolution shows ${activeChip}. Retrying click.`
-          )
-          await trustedClickBySelector(activeTab.id, `div[data-role="chip"][data-value="${chipValue}"]`)
-          await new Promise((r) => setTimeout(r, 200))
+        const {
+          chipValue,
+          numbers,
+          doubleCount = 0
+        } = message as {
+          chipValue: number
+          numbers: number[]
+          doubleCount?: number
         }
 
         const placed: number[] = []
         const missed: number[] = []
+
+        console.log(`[watchful-wind] Bet loop start — ${numbers.length} clicks, chip ${chipValue}`)
 
         for (const num of numbers) {
           const result = await trustedClickBySelector(activeTab.id, `[data-bet-spot-id="${num}"]`)
@@ -358,12 +339,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             placed.push(num)
           } else {
             missed.push(num)
+            console.warn(`[watchful-wind] Bet spot ${num} missed — ${result.error ?? 'unknown error'}`)
           }
-          // 220 ms lets the chip-placement animation complete before the next click.
-          await new Promise((r) => setTimeout(r, 140))
+          // delay lets the chip-placement animation complete before the next click.
+          // 140 ms too slow
+          // 130 is OK & 125 si too fast that clicks are missed
+          await new Promise((r) => setTimeout(r, 130))
         }
 
-        sendResponse({ ok: placed.length > 0, placed, missed })
+        // ── Double-button pass ─────────────────────────────────────────────────
+        // For rounds with a 2ⁿ multiplier (round 3 = 2×, 4 = 4×, 5 = 8×) the
+        // caller passes doubleCount = log₂(multiplier) so we can double all bets
+        // in one sweep instead of repeating every slot click N times.
+        const doublesApplied: number[] = []
+        for (let i = 0; i < doubleCount; i++) {
+          const dr = await trustedClickBySelector(activeTab.id, '[data-role="double-button"]')
+          doublesApplied.push(i + 1)
+          if (!dr.ok) {
+            console.warn(`[watchful-wind] Double click ${i + 1}/${doubleCount} failed: ${dr.error}`)
+          }
+          // Give Evolution's animation time to register before the next double.
+          await new Promise((r) => setTimeout(r, 220))
+        }
+
+        sendResponse({ ok: placed.length > 0, placed, missed, doublesApplied })
       } catch (error) {
         sendResponse({ ok: false, error: String(error) })
       }

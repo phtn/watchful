@@ -10,6 +10,7 @@ export interface KimAlgoOptions {
   allowOverlaps?: boolean
   spreadSelectionMode?: KimSpreadSelectionMode
   hotNumbers?: readonly number[]
+  scatter?: boolean
 }
 
 export interface KimAlgoBetPlan {
@@ -25,6 +26,7 @@ export interface KimAlgoBetPlan {
   allowOverlaps: boolean
   spreadQuadrants: KimQuadrantId[]
   spreadSelectionMode: KimSpreadSelectionMode
+  scatter: boolean
 }
 
 export interface KimAlgoSelection {
@@ -445,11 +447,24 @@ export function getKimAlgoNetProfit(
   return getKimAlgoGrossReturn(bet, landedNumber) - bet.totalStake
 }
 
+function seededShuffle<T>(items: readonly T[], seed: number): T[] {
+  const result = [...items]
+  let s = (seed + 1) >>> 0
+  for (let i = result.length - 1; i > 0; i--) {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0
+    const j = s % (i + 1)
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
 export function createKimAlgoBetPlan(
   round: KimAlgoRound,
   quadrants: readonly KimQuadrantId[],
   baseUnit: number = 1,
-  options: Pick<KimAlgoOptions, 'allowOverlaps' | 'spreadSelectionMode' | 'hotNumbers'> = {}
+  options: Pick<KimAlgoOptions, 'allowOverlaps' | 'spreadSelectionMode' | 'hotNumbers' | 'scatter'> & {
+    scatterSeed?: number
+  } = {}
 ): KimAlgoBetPlan {
   assertValidRound(round)
   assertValidUnit(baseUnit)
@@ -460,25 +475,38 @@ export function createKimAlgoBetPlan(
 
   const unitStake = baseUnit * KIMS_ALGO_PROGRESSIVE_MULTIPLIERS[round - 1]
   const zeroStake = round >= 4 ? unitStake : 0
+  const scatter = options.scatter ?? false
   const allowOverlaps = options.allowOverlaps ?? false
   const spreadSelectionMode = options.spreadSelectionMode ?? 'within'
   const spreadQuadrants: KimQuadrantId[] = []
-  const numbers = quadrants.reduce<number[]>((placements, quadrant) => {
-    const resolved = resolveQuadrantPlacements(
-      quadrant,
-      placements,
-      allowOverlaps,
-      spreadSelectionMode,
-      options.hotNumbers ?? []
-    )
+  let numbers: number[]
 
-    if (resolved.spreadApplied) {
-      spreadQuadrants.push(quadrant)
-    }
+  if (scatter) {
+    // Unique pool from all active quadrants, randomly sampled each round
+    const pool = [...new Set(quadrants.flatMap((q) => [...KIMS_ALGO_QUADRANTS[q]]))]
+    numbers =
+      options.scatterSeed !== undefined
+        ? seededShuffle(pool, options.scatterSeed)
+        : [...pool].sort(() => Math.random() - 0.5)
+  } else {
+    numbers = quadrants.reduce<number[]>((placements, quadrant) => {
+      const resolved = resolveQuadrantPlacements(
+        quadrant,
+        placements,
+        allowOverlaps,
+        spreadSelectionMode,
+        options.hotNumbers ?? []
+      )
 
-    placements.push(...resolved.numbers)
-    return placements
-  }, [])
+      if (resolved.spreadApplied) {
+        spreadQuadrants.push(quadrant)
+      }
+
+      placements.push(...resolved.numbers)
+      return placements
+    }, [])
+  }
+
   const coverageCount = numbers.length + (zeroStake > 0 ? 1 : 0)
 
   return {
@@ -493,7 +521,8 @@ export function createKimAlgoBetPlan(
     coveragePercent: (coverageCount / EUROPEAN_ROULETTE_SLOT_COUNT) * 100,
     allowOverlaps,
     spreadQuadrants,
-    spreadSelectionMode
+    spreadSelectionMode,
+    scatter
   }
 }
 
@@ -503,7 +532,8 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
     baseUnit: options.baseUnit ?? 1,
     allowOverlaps: options.allowOverlaps ?? false,
     spreadSelectionMode: options.spreadSelectionMode ?? 'within',
-    hotNumbers: options.hotNumbers ?? []
+    hotNumbers: options.hotNumbers ?? [],
+    scatter: options.scatter ?? false
   }
 
   assertValidUnit(resolvedOptions.baseUnit)
@@ -518,7 +548,9 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
     const bet = createKimAlgoBetPlan(activeRound, activeQuadrants, resolvedOptions.baseUnit, {
       allowOverlaps: resolvedOptions.allowOverlaps,
       spreadSelectionMode: resolvedOptions.spreadSelectionMode,
-      hotNumbers: resolvedOptions.hotNumbers
+      hotNumbers: resolvedOptions.hotNumbers,
+      scatter: resolvedOptions.scatter,
+      scatterSeed: index
     })
     const hitQuadrant = bet.numbers.includes(landedNumber)
     const hitZero = bet.zeroStake > 0 && landedNumber === 0

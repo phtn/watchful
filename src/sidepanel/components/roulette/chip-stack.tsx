@@ -13,7 +13,7 @@ interface Chip extends ChipProps {
 export const EVO_BUTTON_SELECTORS = {
   undo: '[data-role="undo-last-bet-button"]',
   rebet: '[data-role="rebet-button"]',
-  double: '[data-role="double-bets-button"]'
+  double: '[data-role="double-button"]'
 } as const
 
 interface ChipStackProps {
