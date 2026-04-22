@@ -304,8 +304,14 @@ export function RouletteVirtualBoard({
 
   // ── Loaded: auto-execute bets once per simulation step ───────────────────
   // Reset the step guard on every arm/disarm so each new session starts fresh.
+  // On disarm (win, loss, or manual), also clear stale bet status and tracked numbers
+  // so the board returns to a clean idle state without requiring a manual re-arm cycle.
   useEffect(() => {
     lastBetStepRef.current = -1
+    if (!isTracking) {
+      setBetStatus('idle')
+      setTrackedWinningNumbers([])
+    }
   }, [isTracking])
 
   useEffect(() => {
@@ -445,7 +451,7 @@ export function RouletteVirtualBoard({
         'overflow-hidden rounded-s-lg text-white pl-2',
         'bg-[radial-gradient(circle,rgba(239,68,68,0.28),transparent_68%)]'
       )}>
-      <div className='flex items-center justify-between bg-zinc-900 py-3 px-3 rounded-s-lg shadow-inner'>
+      <div className='flex items-center justify-between bg-zinc-950 py-3 px-3 rounded-s-lg shadow-inner'>
         <div className=''>
           {lastWinProfit !== null && (
             <p className='font-semibold text-lg italic uppercase text-emerald-100'>
@@ -466,7 +472,8 @@ export function RouletteVirtualBoard({
               <span
                 className={cn(`h-5 min-w-5 bg-no-repeat object-contain`, {
                   'animate-pulse': signalFound && !isTracking,
-                  'opacity-20': !signalFound
+                  'grayscale-75 opacity-40': !signalFound,
+                  'opacity-10': auto
                 })}
                 style={{
                   backgroundImage: 'url(./icons/gem-lime.svg)',
@@ -707,23 +714,23 @@ export function RouletteVirtualBoard({
                             : undefined
                         }
                         className={cn(
-                          'mr-0.75 relative h-12 w-12 flex items-center justify-center aspect-square rounded-xs border-[0.5px] disabled:cursor-default',
+                          'mr-0.75 relative h-12 w-12 flex items-center justify-center aspect-square rounded-xs border disabled:cursor-default',
                           'transition-all duration-100 ease-in-out ',
                           getNumberTone(value),
                           getQuadTone(value, isHoveredQuadrantMember, isActive),
                           isActive &&
-                            'ring-2 ring-emerald-500 border-emerald-400 ring-offset-0 ring-offset-emerald-500',
+                            'ring-2 ring-emerald-400 border-emerald-400 ring-offset-0 ring-offset-lime-emerald rounded-px',
                           isActive && hotRank && nextBet.round >= 4 && 'animate-pulse',
                           isLatest && 'border-amber-300 shadow-[0_0_0_1px_rgba(252,211,77,0.55)]',
                           isHoveredQuadrantMember && 'ring-2 ring-white/80 ring-offset-0 ring-offset-slate-950',
                           isStartingQuadrantTrigger && 'cursor-pointer',
-                          isSelectedStartingQuadrant && 'border-white/30 shadow-[0_0_0_1px_rgba(255,255,255,0.22)]'
+                          isSelectedStartingQuadrant && 'border-emerald-400'
                         )}>
                         <span className='text-lg font-semibold drop-shadow-xs'>{value}</span>
                         {isActive && effectiveMultiplier > 1 ? (
                           <span
                             className={cn(
-                              'absolute right-0.5 top-0.5 rounded-full bg-amber-200 size-4 text-center text-[8px] font-bold uppercase -tracking-widest text-slate-950',
+                              'absolute right-0 top-0 rounded-full bg-amber-200 size-4 text-center text-[8px] font-bold uppercase -tracking-widest text-slate-950',
                               {
                                 'bg-indigo-400 text-white': effectiveMultiplier === 4,
                                 'bg-fuchsia-300': effectiveMultiplier === 8
@@ -735,7 +742,7 @@ export function RouletteVirtualBoard({
                         {hotRank ? (
                           <span
                             className={cn(
-                              'absolute -bottom-px -left-px flex h-3 w-3 items-center justify-center rounded-xs rounded-bl-sm text-[7px] font-bold shadow-sm',
+                              'absolute -bottom-px -left-px flex h-3 w-3 items-center justify-center rounded-xs rounded-bl-xs text-[7px] font-bold shadow-sm',
                               hotRank === 1 && 'bg-amber-400 text-amber-900',
                               hotRank === 2 && 'bg-zinc-300 text-zinc-700',
                               hotRank === 3 && 'bg-orange-600 text-orange-100',

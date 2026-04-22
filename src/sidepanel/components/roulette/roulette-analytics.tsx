@@ -169,7 +169,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           <VPctBar
             label='1st (1-12)'
             percentage={stats.dozens[0].pct}
-            color='bg-linear-to-b from-cyan-300/50 to-cyan'
+            color='bg-linear-to-b from-cyan-300 to-cyan-300/50'
             count={stats.dozens[0].count}
             cols='col-span-3'
           />
@@ -183,7 +183,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           <VPctBar
             label='3rd (25-36)'
             percentage={stats.dozens[2].pct}
-            color='bg-linear-to-b from-blue-300/50 to-blue-300'
+            color='bg-linear-to-b from-blue-300 to-blue-300/50'
             count={stats.dozens[2].count}
             cols='col-span-3'
           />
@@ -419,12 +419,12 @@ const NumberBadge: FC<NumberBadgeProps> = ({ number, count, isHot = true, showCo
   return (
     <div className='relative group'>
       <div
-        className={`w-9 h-8 ${getColor(number)} rounded-xl flex items-center justify-center font-bold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
+        className={`w-9 h-8 ${getColor(number)} rounded-md flex items-center justify-center font-bold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
         <span className='font-bold text-base'>{number}</span>
       </div>
       {showCount && (
         <div
-          className={`absolute -top-px -right-px w-3 h-3 rounded-sm flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
+          className={`absolute -top-px -right-px w-3.5 h-3.5 rounded-sm flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
           {count}
         </div>
       )}
