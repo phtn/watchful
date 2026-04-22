@@ -92,7 +92,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
     // Hot and Cold numbers
     const sortedNumbers = Array.from(numberCounts.entries()).sort((a, b) => b[1] - a[1])
 
-    const hotNumbers = sortedNumbers.slice(0, 8).filter(([, count]) => count > 0)
+    const hotNumbers = sortedNumbers.slice(0, 5).filter(([, count]) => count > 0)
     const coldNumbers = sortedNumbers
       .slice(-5)
       .reverse()
@@ -127,7 +127,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
     <div className='space-y-2 text-white p-1'>
       <div className='mx-auto space-y-2'>
         {/* Hot & Cold Numbers */}
-        <div className={cn('grid lg:grid-cols-2 gap-1', cardClassName)}>
+        <div className={cn('grid grid-cols-2 gap-1', cardClassName)}>
           <div className={cn('rounded-lg p-4')}>
             <div className='flex flex-wrap gap-3'>
               <div className='-rotate-90 p-0.5 rounded-sm text-orange-300 text-xs h-4'>
@@ -169,21 +169,21 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           <VPctBar
             label='1st (1-12)'
             percentage={stats.dozens[0].pct}
-            color='bg-linear-to-b from-violet-300/50 to-purple-300'
+            color='bg-linear-to-b from-cyan-300/50 to-cyan'
             count={stats.dozens[0].count}
             cols='col-span-3'
           />
           <VPctBar
             label='2nd (13-24)'
             percentage={stats.dozens[1].pct}
-            color='bg-linear-to-b from-purple-300/50 to-fuchsia-300'
+            color='bg-linear-to-b from-sky-300/50 to-sky-300'
             count={stats.dozens[1].count}
             cols='col-span-3'
           />
           <VPctBar
             label='3rd (25-36)'
             percentage={stats.dozens[2].pct}
-            color='bg-linear-to-b from-fuchsia-300/50 to-pink-300'
+            color='bg-linear-to-b from-blue-300/50 to-blue-300'
             count={stats.dozens[2].count}
             cols='col-span-3'
           />
@@ -412,7 +412,7 @@ interface NumberBadgeProps {
 const NumberBadge: FC<NumberBadgeProps> = ({ number, count, isHot = true, showCount = true }) => {
   const getColor = (num: number) => {
     if (num === 0) return 'bg-linear-to-br from-emerald-500 to-emerald-600'
-    if (RED_NUMBERS.includes(num)) return 'bg-linear-to-br from-rose-500 to-rose-600'
+    if (RED_NUMBERS.includes(num)) return 'bg-linear-to-br from-[#B51B13] to-rose-600'
     return 'bg-linear-to-br from-neutral-600 to-neutral-700'
   }
 

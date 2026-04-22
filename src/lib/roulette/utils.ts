@@ -1,5 +1,15 @@
 import { RED_NUMBERS_SET } from '.'
-import { PanelStatus } from '../../types'
+import { ClassName, PanelStatus } from '../../types'
+
+export function getQuadTone(value: number | undefined, isMember: boolean, isActive: boolean): ClassName {
+  if (value === undefined) {
+    return ''
+  }
+
+  return RED_NUMBERS_SET.has(value) && (isMember || isActive)
+    ? 'border-white bg-[#B51B13] text-neutral-50'
+    : 'text-slate-100'
+}
 
 export function getNumberTone(value: number | undefined): string {
   if (value === undefined) {
@@ -10,7 +20,7 @@ export function getNumberTone(value: number | undefined): string {
   }
 
   return RED_NUMBERS_SET.has(value)
-    ? 'border-[#89211d] bg-[#89211d] text-neutral-50'
+    ? 'border-[#89211d] bg-[#902823] text-neutral-50' //#89211d
     : 'border-black/50 bg-black text-slate-200'
 }
 

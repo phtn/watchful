@@ -12,11 +12,10 @@ import {
   type KimQuadrantId,
   type KimSpreadSelectionMode
 } from '../../../lib/roulette'
-import { getNumberTone } from '../../../lib/roulette/utils'
+import { getNumberTone, getQuadTone } from '../../../lib/roulette/utils'
 import { cn } from '../../../lib/utils'
 import type { PanelStatus } from '../../../types'
 import { ChipStack, EVO_BUTTON_SELECTORS } from './chip-stack'
-import { cardClassName } from './roulette-analytics'
 
 interface RouletteVirtualBoardProps {
   status: PanelStatus
@@ -441,10 +440,13 @@ export function RouletteVirtualBoard({
   const onTables = useCallback(() => sendEvoClick('[data-role="plus-table-button"]', 'tables'), [sendEvoClick])
   // border border-white/12 bg-[linear-gradient(180deg,rgba(8,15,29,0.96),rgba(11,19,35,0.92))]
   return (
-    <section className={cn('overflow-hidden rounded-lg text-white', cardClassName)}>
-      <div className='flex items-start justify-between'>
-        <div className='space-y-1'>
-          <p className='text-[0.62rem] uppercase tracking-[0.32em] text-emerald-100/70'>KIM 3.6</p>
+    <section
+      className={cn(
+        'overflow-hidden rounded-s-lg text-white pl-2',
+        'bg-[radial-gradient(circle,rgba(239,68,68,0.28),transparent_68%)]'
+      )}>
+      <div className='flex items-center justify-between bg-zinc-900 py-3 px-3 rounded-s-lg shadow-inner'>
+        <div className=''>
           {lastWinProfit !== null && (
             <p className='font-semibold text-lg italic uppercase text-emerald-100'>
               <span className='-tracking-widest'>Snatched</span>{' '}
@@ -453,7 +455,7 @@ export function RouletteVirtualBoard({
           )}
         </div>
         <div className='flex flex-col items-end gap-2'>
-          <div className='flex flex-wrap items-center justify-end gap-3 bg-zinc-900/70 py-3 px-4 rounded-lg shadow-inner'>
+          <div className='flex flex-wrap items-center justify-end gap-4'>
             <div
               className={cn(
                 'bg-zinc-900/70 border border-zinc-900/70 rounded-lg h-6 w-6 flex items-center justify-center',
@@ -464,10 +466,10 @@ export function RouletteVirtualBoard({
               <span
                 className={cn(`h-5 min-w-5 bg-no-repeat object-contain`, {
                   'animate-pulse': signalFound && !isTracking,
-                  'grayscale opacity-30': !signalFound
+                  'opacity-20': !signalFound
                 })}
                 style={{
-                  backgroundImage: 'url(./icons/gem.svg)',
+                  backgroundImage: 'url(./icons/gem-lime.svg)',
                   backgroundColor: 'transparent'
                 }}></span>
             </div>
@@ -479,13 +481,13 @@ export function RouletteVirtualBoard({
               className={cn(
                 'h-5 w-5 bg-zinc-900/60 border border-zinc-900/60 backdrop-blur-2xl rounded-md flex items-center justify-center',
                 {
-                  'opacity-40 grayscale': !scatter
+                  'opacity-25': !scatter
                 }
               )}>
               <span
-                className={`h-5 min-w-5 opacity-80`}
+                className={cn(`h-5 min-w-5`)}
                 style={{
-                  backgroundImage: scatter ? 'url(./icons/gem-blue.svg)' : 'url(./icons/gem-silver.svg)',
+                  backgroundImage: 'url(./icons/gem-blue.svg)',
                   backgroundColor: 'transparent'
                 }}></span>
             </button>
@@ -606,7 +608,7 @@ export function RouletteVirtualBoard({
       </div>
 
       <div className='grid gap-2 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]'>
-        <div className='bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]'>
+        <div className='bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]'>
           <div className='hidden _flex items-end justify-between gap-3'>
             <div>
               <div id='acc-value' className='font-bold italic'>
@@ -705,8 +707,10 @@ export function RouletteVirtualBoard({
                             : undefined
                         }
                         className={cn(
-                          'mr-0.75 relative flex h-12 w-12 aspect-square items-center justify-center rounded-xs border-[0.5px] text-sm font-semibold _shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
+                          'mr-0.75 relative h-12 w-12 flex items-center justify-center aspect-square rounded-xs border-[0.5px] disabled:cursor-default',
+                          'transition-all duration-100 ease-in-out ',
                           getNumberTone(value),
+                          getQuadTone(value, isHoveredQuadrantMember, isActive),
                           isActive &&
                             'ring-2 ring-emerald-500 border-emerald-400 ring-offset-0 ring-offset-emerald-500',
                           isActive && hotRank && nextBet.round >= 4 && 'animate-pulse',
@@ -715,11 +719,11 @@ export function RouletteVirtualBoard({
                           isStartingQuadrantTrigger && 'cursor-pointer',
                           isSelectedStartingQuadrant && 'border-white/30 shadow-[0_0_0_1px_rgba(255,255,255,0.22)]'
                         )}>
-                        <span className='text-base font-semibold drop-shadow-xs'>{value}</span>
+                        <span className='text-lg font-semibold drop-shadow-xs'>{value}</span>
                         {isActive && effectiveMultiplier > 1 ? (
                           <span
                             className={cn(
-                              'absolute -right-1.5 -top-1.5 rounded-full bg-amber-300 px-1 py-0.5 text-[8px] font-bold uppercase -tracking-widest text-slate-950',
+                              'absolute right-0.5 top-0.5 rounded-full bg-amber-200 size-4 text-center text-[8px] font-bold uppercase -tracking-widest text-slate-950',
                               {
                                 'bg-indigo-400 text-white': effectiveMultiplier === 4,
                                 'bg-fuchsia-300': effectiveMultiplier === 8
@@ -731,7 +735,7 @@ export function RouletteVirtualBoard({
                         {hotRank ? (
                           <span
                             className={cn(
-                              'absolute -bottom-px -left-px flex h-3 w-3 items-center justify-center rounded-xs rounded-bl-md text-[7px] font-bold shadow-sm',
+                              'absolute -bottom-px -left-px flex h-3 w-3 items-center justify-center rounded-xs rounded-bl-sm text-[7px] font-bold shadow-sm',
                               hotRank === 1 && 'bg-amber-400 text-amber-900',
                               hotRank === 2 && 'bg-zinc-300 text-zinc-700',
                               hotRank === 3 && 'bg-orange-600 text-orange-100',
@@ -769,7 +773,7 @@ export function RouletteVirtualBoard({
           <div className='mt-2 grid grid-cols-4 px-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>round</p>
-              <p className='mt-2 text-lg font-semibold text-white'>{nextBet.round}</p>
+              <p className='mt-1.5 text-lg font-semibold text-white'>{nextBet.round}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>W-streak</p>
@@ -810,7 +814,7 @@ export function RouletteVirtualBoard({
           <div className='grid grid-cols-5 mt-1 px-1 pb-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Next</p>
-              <p className='mt-2 text-lg font-semibold text-white'>{fmtAmt(nextBet.totalStake)}</p>
+              <p className='mt-1.5 text-lg font-semibold text-white'>{fmtAmt(nextBet.totalStake)}</p>
 
               <p className='hidden mt-1 text-xs text-slate-400'>
                 Unit {nextBet.unitStake} · x{roundMultiplier}
@@ -822,17 +826,17 @@ export function RouletteVirtualBoard({
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Staked</p>
-              <p className='mt-2 text-lg font-semibold text-white'>{fmtAmt(totalStaked)}</p>
+              <p className='mt-1.5 text-lg font-semibold text-white'>{fmtAmt(totalStaked)}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
                 Take &middot; <span className='tracking-normal text-emerald-400 font-semibold'>{winAmount}</span>
               </p>
-              <p className='mt-2 text-lg font-semibold text-yellow-300'>{fmtAmt(winAmount - totalStaked)}</p>
+              <p className='mt-1.5 text-lg font-semibold text-yellow-300'>{fmtAmt(winAmount - totalStaked)}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>PCT</p>
-              <p className='mt-2 text-lg font-semibold text-indigo-300'>
+              <p className='mt-1.5 text-lg font-semibold text-indigo-300'>
                 {(((winAmount - totalStaked) / (baseUnit * 288)) * 100).toFixed(2)}
                 <span className='text-[7px]'>%</span>
               </p>
@@ -841,7 +845,7 @@ export function RouletteVirtualBoard({
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
                 cvg &middot; ({nextBet.coverageCount})
               </p>
-              <p className='mt-2 text-lg font-semibold text-white'>
+              <p className='mt-1.5 text-lg font-semibold text-white'>
                 {nextBet.coveragePercent.toFixed(2)}
                 <span className='text-[7px]'>%</span>
               </p>
@@ -907,7 +911,7 @@ export function RouletteVirtualBoard({
 }
 
 const Stat = ({ children }: PropsWithChildren) => {
-  return <div className='rounded-sm border border-white/15 bg-white/8 backdrop-blur-md p-1.25'>{children}</div>
+  return <div className='rounded-sm border-[0.33px] border-white/15 bg-white/8 backdrop-blur-md p-1.25'>{children}</div>
 }
 
 /*

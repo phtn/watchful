@@ -46,6 +46,7 @@ type CapturedRouletteMessage = EvoMessage | PragmaticPlayMessage
 let tennisSyncTimer: number | null = null
 let lastTennisSignature = ''
 let lastChipSignature = ''
+let lastRecentNumbersSignature = ''
 
 const script = document.createElement('script')
 script.src = chrome.runtime.getURL('dist/injected.js')
@@ -1331,6 +1332,31 @@ function syncEvolutionChips(): void {
   chrome.storage.local.set({ evolutionChips: values })
 }
 
+function scrapeRecentNumbers(): number[] {
+  const containers = document.querySelectorAll<HTMLElement>('[data-role="recent-number"]')
+  const numbers: number[] = []
+
+  for (const container of containers) {
+    const span = container.querySelector<HTMLElement>('span.value--dd5c7')
+    const raw = span?.textContent?.trim()
+    if (!raw) continue
+    const parsed = Number(raw)
+    if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 36) {
+      numbers.push(parsed)
+    }
+  }
+
+  return numbers
+}
+
+function syncRecentNumbers(): void {
+  const numbers = scrapeRecentNumbers()
+  const signature = numbers.join(',')
+  if (signature === lastRecentNumbersSignature) return
+  lastRecentNumbersSignature = signature
+  chrome.storage.local.set({ evolutionRecentNumbers: numbers })
+}
+
 function initEvolutionChipCapture(): void {
   const root = document.documentElement
   if (!root) {
@@ -1342,6 +1368,7 @@ function initEvolutionChipCapture(): void {
     syncEvolutionChips()
     syncRebetVisible()
     syncBettingOpen()
+    syncRecentNumbers()
   })
 
   observer.observe(root, {
@@ -1355,10 +1382,12 @@ function initEvolutionChipCapture(): void {
     syncEvolutionChips()
     syncRebetVisible()
     syncBettingOpen()
+    syncRecentNumbers()
   }, { once: true })
   syncEvolutionChips()
   syncRebetVisible()
   syncBettingOpen()
+  syncRecentNumbers()
 }
 
 initEvolutionChipCapture()
