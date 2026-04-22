@@ -6,7 +6,7 @@ import { formatAmount, formatDateTime, formatSignedAmount, getNetTone } from '..
 import { cardClassName } from '../roulette/roulette-analytics'
 import { CompactMetric, Metric } from '../shared/hero-metric'
 
-interface VirtualBankrollCardProps {
+export interface VirtualBankrollCardProps {
   bankroll: VirtualBankrollState
   snapshot: VirtualBankrollSnapshot
   onEnable: (seedBalance: number, baseBetAmount: number) => void
@@ -104,12 +104,12 @@ export function VirtualBankrollCard({
       {bankroll.enabled ? (
         <>
           <div className='hidden _grid grid-cols-2 mt-4 gap-3'>
-            <div className='rounded-[16px] border border-white/10 bg-black/20 p-3'>
+            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Current Balance</p>
               <p className='mt-2 text-xl font-semibold text-white'>{formatAmount(snapshot.currentBalance)}</p>
               <p className='mt-1 text-xs text-slate-400'>Seed {formatAmount(bankroll.seedBalance)}</p>
             </div>
-            <div className='rounded-[16px] border border-white/10 bg-black/20 p-3'>
+            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Profit / Loss</p>
               <p className={`mt-2 text-xl font-semibold ${getNetTone(snapshot.profitLoss)}`}>
                 {formatSignedAmount(snapshot.profitLoss)}
@@ -130,13 +130,13 @@ export function VirtualBankrollCard({
           </div>
 
           <div className='grid grid-cols-2 gap-3 mt-3'>
-            <div className='rounded-[16px] border border-white/10 bg-black/20 p-3'>
+            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Tracking Since</p>
               <p className='mt-2 text-sm font-semibold text-white'>
                 {snapshot.trackingStartedAt ? formatDateTime(snapshot.trackingStartedAt) : 'Not started'}
               </p>
             </div>
-            <div className='rounded-[16px] border border-white/10 bg-black/20 p-3'>
+            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
               <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Adjust Bet Amount</p>
               <div className='mt-2 flex gap-2'>
                 <input
@@ -156,7 +156,7 @@ export function VirtualBankrollCard({
             </div>
           </div>
 
-          <div className='hidden mt-4 rounded-[16px] border border-white/10 bg-black/20 p-4'>
+          <div className='hidden mt-4 rounded-xl border border-white/10 bg-black/20 p-4'>
             <div className='flex items-center justify-between gap-3'>
               <p className='text-[0.64rem] uppercase tracking-[0.26em] text-slate-400'>Replenish Balance</p>
               <button
@@ -200,7 +200,7 @@ export function VirtualBankrollCard({
           </div>
         </>
       ) : (
-        <div className='mt-4 rounded-[16px] border border-white/10 bg-black/20 p-4'>
+        <div className='mt-4 rounded-xl border border-white/10 bg-black/20 p-4'>
           <p className='text-sm text-slate-300'>
             Start a paper bankroll and track balance changes from newly captured rounds only.
           </p>

@@ -8,13 +8,12 @@ export interface Metric {
   className?: ClassName
 }
 
-export function HeroMetric({ label, value, detail, className }: Metric) {
+export function HeroMetric({ label, value, className }: Metric) {
   return (
-    <div className={`rounded-lg border-[0.5px] border-white/10 bg-white/8 px-2.5 pt-2 backdrop-blur-md ` + className}>
+    <div className={`rounded-md border-[0.5px] border-white/10 bg-white/8 px-2 pt-1 backdrop-blur-md ` + className}>
       <p className='text-[0.62rem] uppercase tracking-[0.26em] text-cyan-100/65'>{label}</p>
-      <div className='mt-2 w-full flex items-center justify-between'>
-        <p className='text-lg font-semibold text-white font-tri'>{value}</p>
-        <p className='text-[8px] text-slate-300'>{detail}</p>
+      <div className='mt-1 w-full flex items-center justify-between'>
+        <p className='text-base font-display font-semibold text-white'>{value}</p>
       </div>
     </div>
   )

@@ -1,6 +1,5 @@
 // import { GeistPixelCircle } from 'geist/font/pixel'
-import { startTransition, useCallback, useDeferredValue, useEffect, useState } from 'react'
-import { SUPPORTED_SITES } from '../core/siteConfig'
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { deriveVirtualBankroll } from '../lib/virtual-bankroll'
 import {
   EMPTY_STORED_DATA,
@@ -14,13 +13,10 @@ import {
 } from '../types'
 import { EMPTY_ROULETTE_STORED_DATA, normalizeRouletteStoredData, type RouletteStoredData } from '../types/roulette'
 import { EMPTY_TENNIS_STORED_DATA, normalizeTennisStoredData, type TennisStoredData } from '../types/tennis'
-import { GameEntry } from './components/originals/game-entry'
-import { VirtualBankrollCard } from './components/originals/virtual-bankroll-card'
+import { OriginalsWorkspace } from './components/originals/originals-workspace'
 import { RouletteWorkspace } from './components/roulette/roulette-workspace'
 import { GameClassSwitcher, type GameClassView } from './components/shared/game-class-switcher'
 import { MainHeader } from './components/shared/header'
-import { ProviderMetric } from './components/shared/provider-metric'
-import { Pulse } from './components/shared/pulse'
 import { TennisWorkspace } from './components/tennis/tennis-workspace'
 import { getNetTone } from './lib/formatters'
 
@@ -97,23 +93,28 @@ const App = () => {
   }
 
   const loadEvolutionChips = () => {
-    chrome.storage.local.get(['evolutionChips', 'evolutionRebetVisible', 'evolutionBettingOpen', 'evolutionRecentNumbers'], (data) => {
-      const chips = Array.isArray(data.evolutionChips)
-        ? data.evolutionChips.filter((v: unknown) => typeof v === 'number' && v > 0)
-        : []
-      const recentNumbers = Array.isArray(data.evolutionRecentNumbers)
-        ? data.evolutionRecentNumbers.filter((v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 36)
-        : []
-      startTransition(() => {
-        setEvolutionChips((prev) => {
-          const next = chips as number[]
-          return prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next
+    chrome.storage.local.get(
+      ['evolutionChips', 'evolutionRebetVisible', 'evolutionBettingOpen', 'evolutionRecentNumbers'],
+      (data) => {
+        const chips = Array.isArray(data.evolutionChips)
+          ? data.evolutionChips.filter((v: unknown) => typeof v === 'number' && v > 0)
+          : []
+        const recentNumbers = Array.isArray(data.evolutionRecentNumbers)
+          ? data.evolutionRecentNumbers.filter(
+              (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 36
+            )
+          : []
+        startTransition(() => {
+          setEvolutionChips((prev) => {
+            const next = chips as number[]
+            return prev.length === next.length && prev.every((v, i) => v === next[i]) ? prev : next
+          })
+          setEvolutionRebetVisible(data.evolutionRebetVisible === true)
+          setEvolutionBettingOpen(data.evolutionBettingOpen === true)
+          setEvolutionRecentNumbers(recentNumbers as number[])
         })
-        setEvolutionRebetVisible(data.evolutionRebetVisible === true)
-        setEvolutionBettingOpen(data.evolutionBettingOpen === true)
-        setEvolutionRecentNumbers(recentNumbers as number[])
-      })
-    })
+      }
+    )
   }
 
   const persistVirtualBankroll = (nextState: VirtualBankrollState) => {
@@ -124,7 +125,7 @@ const App = () => {
     })
   }
 
-  const requestUrlStatus = () => {
+  const requestUrlStatus: VoidFunction = () => {
     chrome.runtime.sendMessage({ type: 'REQUEST_URL_STATUS' }, () => {
       if (chrome.runtime.lastError) {
         const nextStatus: PanelStatus = {
@@ -171,7 +172,10 @@ const App = () => {
 
       if (
         namespace === 'local' &&
-        (changes.evolutionChips || changes.evolutionRebetVisible || changes.evolutionBettingOpen || changes.evolutionRecentNumbers)
+        (changes.evolutionChips ||
+          changes.evolutionRebetVisible ||
+          changes.evolutionBettingOpen ||
+          changes.evolutionRecentNumbers)
       ) {
         loadEvolutionChips()
       }
@@ -225,7 +229,7 @@ const App = () => {
     }
   }, [])
 
-  const clearData = () => {
+  const clearData: VoidFunction = () => {
     if (!window.confirm('Clear all tracked game history?')) {
       return
     }
@@ -283,7 +287,7 @@ const App = () => {
     })
   }
 
-  const disableVirtualBankroll = () => {
+  const disableVirtualBankroll: VoidFunction = () => {
     persistVirtualBankroll({
       ...virtualBankroll,
       enabled: false
@@ -339,6 +343,45 @@ const App = () => {
     setSimulated((prev) => !prev)
   }, [])
 
+  const pulseProps = useMemo(
+    () => ({
+      requestUrlStatus: requestUrlStatus,
+      clearData: clearData,
+      totalStaked: totalStaked,
+      netProfit: netProfit,
+      latestGame: latestGame,
+      getNetTone: getNetTone,
+      simulated: simulated,
+      toggleSimulated: toggleSimulated
+    }),
+    [requestUrlStatus, clearData, totalStaked, netProfit, latestGame, getNetTone, simulated, toggleSimulated]
+  )
+
+  const vrBankProps = useMemo(
+    () => ({
+      bankroll: virtualBankroll,
+      snapshot: bankrollSnapshot,
+      onEnable: enableVirtualBankroll,
+      onDisable: disableVirtualBankroll,
+      onUpdateBetAmount: updateVirtualBankrollBetAmount,
+      onReplenish: replenishVirtualBankroll,
+      onReset: resetVirtualBankroll,
+      onUpdateBaseBetAmount: updateVirtualBankrollBetAmount
+    }),
+    [
+      virtualBankroll,
+      bankrollSnapshot,
+      enableVirtualBankroll,
+      disableVirtualBankroll,
+      updateVirtualBankrollBetAmount,
+      replenishVirtualBankroll,
+      resetVirtualBankroll,
+      updateVirtualBankrollBetAmount
+    ]
+  )
+
+  const toggleShowSettings = () => setShowSettings((value) => !value)
+
   return (
     <div className={`min-h-screen text-slate-950 bg-[#282828] antialiased`}>
       <div className='mx-auto flex max-w-4xl flex-col'>
@@ -354,129 +397,21 @@ const App = () => {
         </div>
 
         {activeGameClass === 'originals' ? (
-          <>
-            <div className='pt-2 px-6'>
-              <Pulse
-                requestUrlStatus={requestUrlStatus}
-                clearData={clearData}
-                totalStaked={totalStaked}
-                netProfit={netProfit}
-                latestGame={latestGame}
-                getNetTone={getNetTone}
-                simulated={simulated}
-                toggleSimulated={toggleSimulated}
-              />
-            </div>
-            {simulated && (
-              <VirtualBankrollCard
-                bankroll={virtualBankroll}
-                snapshot={bankrollSnapshot}
-                onEnable={enableVirtualBankroll}
-                onDisable={disableVirtualBankroll}
-                onUpdateBaseBetAmount={updateVirtualBankrollBetAmount}
-                onReplenish={replenishVirtualBankroll}
-                onReset={resetVirtualBankroll}
-              />
-            )}
-            {/*<KenoRecommendation results={stats.results} />*/}
-            <section className='rounded-none border border-white/60 bg-white/60 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
-              <div className='flex items-center justify-between gap-3'>
-                <div>
-                  <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Most Recent</p>
-                  <h2 className='font-circ mt-2 text-lg leading-none text-slate-900'>Captured Games</h2>
-                </div>
-                <div className='rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1 text-xs font-mono uppercase tracking-[0.18em] text-slate-600'>
-                  {recentResults.length} shown
-                </div>
-              </div>
-
-              {recentResults.length > 0 ? (
-                <div className='mt-4 max-h-[520.01px] space-y-3 overflow-y-auto pr-1'>
-                  {recentResults.map((game) => (
-                    <GameEntry key={game.id ?? `${game.timestamp}-${game.roundId ?? ''}`} game={game} />
-                  ))}
-                </div>
-              ) : (
-                <div className='mt-4 rounded-[24.01px] border border-dashed border-slate-200 bg-slate-50/80 px-5 py-10 text-center'>
-                  <p className='font-display text-[1.3rem] text-slate-900'>No rounds captured yet</p>
-                  <p className='mt-2 text-sm text-slate-500'>
-                    Open bet88.ph or Stake, place a round, and the feed will populate here.
-                  </p>
-                </div>
-              )}
-            </section>
-            <section className='rounded-none border border-white/60 bg-white/76 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.35)] backdrop-blur-xl'>
-              <div className='flex items-center justify-between gap-3'>
-                <div>
-                  <p className='text-[0.64rem] uppercase tracking-[0.28em] text-slate-500'>Network Surface</p>
-                  <h2 className='font-display mt-2 text-[1.55rem] leading-none text-slate-900'>Capture Routes</h2>
-                </div>
-                <button
-                  onClick={() => setShowSettings((value) => !value)}
-                  className='rounded-full border border-slate-200/80 bg-white px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-700 transition hover:border-slate-300 hover:text-slate-950'>
-                  {showSettings ? 'Hide Port' : 'Dev Port'}
-                </button>
-              </div>
-
-              <div className='mt-4 flex flex-wrap gap-2'>
-                {SUPPORTED_SITES.map((site) => (
-                  <div
-                    key={site.key}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] ${
-                      status.site === site.key
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-200/80 bg-slate-50 text-slate-600'
-                    }`}>
-                    {site.label}
-                  </div>
-                ))}
-              </div>
-
-              <div className='mt-4 grid grid-cols-2 gap-3'>
-                <ProviderMetric
-                  label='bet88.ph'
-                  summary={stats.providers.bet88}
-                  tone='border-sky-200/80 bg-sky-50 text-sky-800'
-                />
-                <ProviderMetric
-                  label='Stake'
-                  summary={stats.providers.stake}
-                  tone='border-emerald-200/80 bg-emerald-50 text-emerald-800'
-                />
-              </div>
-
-              <div className='mt-4 rounded-[24.01px] border border-white/70 bg-[linear-gradient(180deg,rgba(240,244,255,0.94),rgba(255,255,255,0.92))] p-4'>
-                <p className='text-[0.64rem] uppercase tracking-[0.26em] text-slate-500'>Dev server relay</p>
-                <p className='mt-2 text-sm text-slate-600'>
-                  Mirroring tracked rounds to{' '}
-                  <code className='rounded bg-white px-1.5 py-1 text-slate-800'>
-                    http://localhost:{devServerPort}/api/results
-                  </code>
-                </p>
-
-                {showSettings ? (
-                  <div className='mt-4 flex gap-2'>
-                    <input
-                      type='number'
-                      min='1'
-                      max='65535'
-                      value={devServerPort}
-                      onChange={(event) => setDevServerPort(parseInt(event.target.value, 10) || 3000)}
-                      className='flex-1 rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-900'
-                      placeholder='3000'
-                    />
-                    <button
-                      onClick={() => saveDevServerPort(devServerPort)}
-                      className='rounded-[18px] bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800'>
-                      Save
-                    </button>
-                  </div>
-                ) : (
-                  <p className='mt-4 text-sm font-semibold text-slate-900'>Port {devServerPort}</p>
-                )}
-              </div>
-            </section>
-          </>
+          <OriginalsWorkspace
+            pulseProps={pulseProps}
+            vrBankProps={vrBankProps}
+            recentResults={recentResults}
+            onReset={clearData}
+            simulated={simulated}
+            toggleSimulated={toggleSimulated}
+            toggleShowSettings={toggleShowSettings}
+            settingsVisible={showSettings}
+            setDevServerPort={setDevServerPort}
+            saveDevServerPort={saveDevServerPort}
+            devServerPort={devServerPort}
+            status={status}
+            stats={stats}
+          />
         ) : activeGameClass === 'roulette' ? (
           <div className=''>
             <RouletteWorkspace

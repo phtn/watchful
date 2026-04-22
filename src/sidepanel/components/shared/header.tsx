@@ -70,7 +70,7 @@ export const MainHeader = ({ status, stats, latestGame, onGameClassChange, gameC
               />
             </div>
             <div>
-              <h1 className='font-circ mt-1 text-lg font-bold leading-4 drop-shadow-px drop-shadow-black text-white!'>
+              <h1 className='font-display mt-1 text-lg font-bold leading-4 drop-shadow-px drop-shadow-black text-white!'>
                 Watchful Wind
               </h1>
             </div>

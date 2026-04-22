@@ -424,7 +424,7 @@ const NumberBadge: FC<NumberBadgeProps> = ({ number, count, isHot = true, showCo
       </div>
       {showCount && (
         <div
-          className={`absolute -top-px -right-px w-3.5 h-3.5 rounded-sm flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
+          className={`absolute -top-px -right-px w-3.5 h-3.5 rounded-xs flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
           {count}
         </div>
       )}
