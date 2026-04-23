@@ -5,7 +5,7 @@ import { GameClassView } from './game-class-switcher'
 interface HeaderProps {
   status: PanelStatus
   stats: ResultSummary
-  latestGame: GameResult | null
+  latestGame: GameResult | undefined
   gameClass: GameClassView
   onGameClassChange: VoidFunction
 }

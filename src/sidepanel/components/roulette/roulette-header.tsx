@@ -52,11 +52,11 @@ export const RouletteHeader = ({ stats, latestSpin, previewSpins }: RouletteHead
             <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Recent spins</p>
             <p className='text-xs text-slate-500'>{latestSpin ? latestSpin.description : 'Listening for spins'}</p>
           </div>*/}
-          <div className='flex flex-wrap gap-2 w-full'>
-            {previewSpins.slice(0, 12).map((value, index) => (
+          <div className='flex flex-wrap gap-1.5 w-full'>
+            {previewSpins.slice(0, 10).map((value, index) => (
               <div
                 key={`preview-spin-${value}-${index}`}
-                className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-2 text-sm font-semibold ${getNumberTone(value)}`}>
+                className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-sm font-semibold ${getNumberTone(value)}`}>
                 {value}
               </div>
             ))}

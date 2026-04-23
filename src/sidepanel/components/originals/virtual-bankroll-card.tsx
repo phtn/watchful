@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn } from '../../../lib/utils'
 import type { VirtualBankrollSnapshot } from '../../../lib/virtual-bankroll'
 import type { VirtualBankrollState } from '../../../types'
-import { formatAmount, formatDateTime, formatSignedAmount, getNetTone } from '../../lib/formatters'
 import { cardClassName } from '../roulette/roulette-analytics'
-import { CompactMetric, Metric } from '../shared/hero-metric'
 
 export interface VirtualBankrollCardProps {
   bankroll: VirtualBankrollState
@@ -17,7 +15,7 @@ export interface VirtualBankrollCardProps {
 }
 
 function formatEditableNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(value)
+  return String(value)
 }
 
 export function VirtualBankrollCard({
@@ -48,7 +46,6 @@ export function VirtualBankrollCard({
     if (!Number.isFinite(parsedSeed) || parsedSeed < 0 || !Number.isFinite(parsedBet) || parsedBet <= 0) {
       return
     }
-
     onEnable(parsedSeed, parsedBet)
   }
 
@@ -57,10 +54,15 @@ export function VirtualBankrollCard({
     if (!Number.isFinite(parsed) || parsed <= 0) {
       return
     }
-
     onReplenish(parsed)
     setReplenishInput('100')
     setShowReplenishForm(false)
+  }
+
+  const handleUpdateSeed = () => {
+    const parsedSeed = Number(seedInput)
+    if (!Number.isFinite(parsedSeed) || parsedSeed < 0) return
+    onEnable(parsedSeed, bankroll.baseBetAmount)
   }
 
   const handleUpdateBaseBet = () => {
@@ -68,88 +70,68 @@ export function VirtualBankrollCard({
     if (!Number.isFinite(parsed) || parsed <= 0) {
       return
     }
-
     onUpdateBaseBetAmount(parsed)
   }
 
-  const fields = useMemo(
-    () =>
-      [
-        {
-          id: 'vb',
-          label: 'Virtual',
-          value: formatAmount(bankroll.seedBalance)
-        },
-        {
-          id: 'pnl',
-          label: 'P / L',
-          value: formatSignedAmount(snapshot.profitLoss)
-        },
-        {
-          id: 'bet',
-          label: 'Bet',
-          value: formatAmount(snapshot.baseBetAmount)
-        }
-      ] as (Metric & { id: string })[],
-    [bankroll]
-  )
+  const handleDoubleUp = (bet: number) => () => setBetInput(formatEditableNumber(bet * 2))
+  const handleDoubleDown = (bet: number) => () => setBetInput(formatEditableNumber(bet / 2))
 
   return (
-    <section
-      className={cn(
-        'rounded-[18px] px-2 py-2 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white backdrop-blur-xl',
-        cardClassName
-      )}>
-      <CompactMetric data={fields} />
+    <section className={cn('rounded-md text-white', cardClassName)}>
       {bankroll.enabled ? (
         <>
-          <div className='hidden _grid grid-cols-2 mt-4 gap-3'>
-            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
-              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Current Balance</p>
-              <p className='mt-2 text-xl font-semibold text-white'>{formatAmount(snapshot.currentBalance)}</p>
-              <p className='mt-1 text-xs text-slate-400'>Seed {formatAmount(bankroll.seedBalance)}</p>
-            </div>
-            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
-              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Profit / Loss</p>
-              <p className={`mt-2 text-xl font-semibold ${getNetTone(snapshot.profitLoss)}`}>
-                {formatSignedAmount(snapshot.profitLoss)}
-              </p>
-              <p className='mt-1 text-xs text-slate-400'>{snapshot.trackedGames} tracked rounds</p>
-            </div>
-          </div>
-
-          <div className='hidden _grid grid-cols-2 gap-3 mt-3'>
-            {/*<div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
-              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Replenished</p>
-              <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.totalReplenished)}</p>
-            </div>*/}
-            {/*<div className='rounded-[20px] border border-slate-200/80 bg-slate-50/90 p-3'>
-              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-500'>Base Bet</p>
-              <p className='mt-2 text-lg font-semibold text-slate-900'>{formatAmount(snapshot.baseBetAmount)}</p>
-            </div>*/}
-          </div>
-
-          <div className='grid grid-cols-2 gap-3 mt-3'>
-            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
-              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Tracking Since</p>
-              <p className='mt-2 text-sm font-semibold text-white'>
-                {snapshot.trackingStartedAt ? formatDateTime(snapshot.trackingStartedAt) : 'Not started'}
-              </p>
-            </div>
-            <div className='rounded-xl border border-white/10 bg-black/20 p-3'>
-              <p className='text-[0.62rem] uppercase tracking-[0.22em] text-slate-400'>Adjust Bet Amount</p>
-              <div className='mt-2 flex gap-2'>
+          <div className='grid grid-cols-2 bg-avocado/5 h-16'>
+            <div className='relative rounded-xs rounded-e-none border border-r-0 border-white/10 bg-black/20'>
+              <label
+                htmlFor='virtual-bank'
+                className='text-[0.62rem] uppercase tracking-wider text-avocado px-1 leading-4'>
+                Bank
+              </label>
+              <div className='mt-3 flex'>
                 <input
+                  id='virtual-bank'
+                  type='number'
+                  min='0.01'
+                  step='0.01'
+                  value={seedInput}
+                  onChange={(event) => setSeedInput(event.target.value)}
+                  className='min-w-0 flex-1 h-8 rounded-px border-t border-white/10 bg-white/5 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-white/30'
+                />
+                <button
+                  onClick={handleUpdateSeed}
+                  className='absolute bottom-0.5 right-0.5 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
+                  Save
+                </button>
+              </div>
+            </div>
+            <div className='relative rounded-sm rounded-s-none border border-white/10 bg-black/20'>
+              <label htmlFor='adjust-bet-amount' className='text-[0.62rem] uppercase tracking-wider text-avocado p-1'>
+                Bet
+              </label>
+              <div className='mt-3 flex'>
+                <input
+                  id='adjust-bet-amount'
                   type='number'
                   min='0.01'
                   step='0.01'
                   value={betInput}
                   onChange={(event) => setBetInput(event.target.value)}
-                  className='min-w-0 flex-1 rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-white/30'
+                  className='min-w-0 flex-1 h-8 rounded-px border-t border-white/10 bg-white/5 px-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-white/30'
                 />
+
+                <button
+                  onClick={handleDoubleDown(+betInput)}
+                  className='absolute bottom-0.5 right-20 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
+                  1/2
+                </button>
+                <button
+                  onClick={handleDoubleUp(+betInput)}
+                  className='absolute bottom-0.5 right-12 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
+                  2x
+                </button>
                 <button
                   onClick={handleUpdateBaseBet}
-                  className='rounded-[14px] border border-white/10 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/15'>
+                  className='absolute bottom-0.5 right-0.5 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
                   Save
                 </button>
               </div>
@@ -174,7 +156,7 @@ export function VirtualBankrollCard({
                   step='0.01'
                   value={replenishInput}
                   onChange={(event) => setReplenishInput(event.target.value)}
-                  className='flex-1 rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-white/30'
+                  className='flex-1 h-8 rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-white/30'
                   placeholder='100'
                 />
                 <button

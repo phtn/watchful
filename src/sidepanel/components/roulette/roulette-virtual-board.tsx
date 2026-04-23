@@ -134,10 +134,12 @@ export function RouletteVirtualBoard({
   const processedStepCountRef = useRef(0)
   // Edge-detection refs
   const prevSignalFoundRef = useRef(false)
-  // Guard: tracks the simulation step count for which we last placed bets.
-  // -1 means no bets placed yet for the current armed session.
-  // This is the sole deduplication mechanism — one bet placement per step.
+  // lastBetStepRef: step for which bets were actually *dispatched* to the background.
+  // claimedStepRef: step for which a pending timer is scheduled (reset on cancel).
+  // Separating these two lets the next betting window retry a step whose timer was
+  // cancelled mid-delay (e.g. the window closed before the delay elapsed).
   const lastBetStepRef = useRef(-1)
+  const claimedStepRef = useRef(-1)
 
   const parsedInput = Number.parseFloat(baseUnitInput)
   const baseUnit =
@@ -308,6 +310,7 @@ export function RouletteVirtualBoard({
   // so the board returns to a clean idle state without requiring a manual re-arm cycle.
   useEffect(() => {
     lastBetStepRef.current = -1
+    claimedStepRef.current = -1
     if (!isTracking) {
       setBetStatus('idle')
       setTrackedWinningNumbers([])
@@ -320,8 +323,9 @@ export function RouletteVirtualBoard({
     if (nextBet.numbers.length === 0) return // nothing to bet
 
     const currentStep = simulation.steps.length
-    if (lastBetStepRef.current === currentStep) return // already bet for this step
-    lastBetStepRef.current = currentStep // claim the step before the delay fires
+    if (lastBetStepRef.current === currentStep) return  // already dispatched for this step
+    if (claimedStepRef.current === currentStep) return  // timer already pending for this step
+    claimedStepRef.current = currentStep                // reserve a pending timer slot
 
     setBetStatus('placing')
 
@@ -339,7 +343,7 @@ export function RouletteVirtualBoard({
     const chip = selectedChip
     const round = nextBet.round
     const multiplier = roundMultiplier
-    const effectiveDelay = betDelay + (round === 1 ? 3000 : 2000)
+    const effectiveDelay = betDelay + (round === 1 ? 3600 : 2400)
 
     console.log(
       `[Load] Scheduling bets in ${effectiveDelay}ms — round ${round}, ${multiplier}x (${doubleCount} doubles), chip ${chip}, ${baseNumbers.length} slot clicks`,
@@ -347,9 +351,10 @@ export function RouletteVirtualBoard({
     )
 
     // Delay the actual placement so Evolution's bet-spot DOM has time to render
-    // after the betting-window signal fires. The deduplication guard above is
-    // already set, so re-renders during the delay won't cause a double-send.
+    // after the betting-window signal fires.
     const timer = setTimeout(() => {
+      claimedStepRef.current = -1         // release the pending slot
+      lastBetStepRef.current = currentStep  // mark step as dispatched
       chrome.runtime.sendMessage(
         { type: 'PLACE_EVOLUTION_BETS', chipValue: chip, numbers: baseNumbers, doubleCount },
         (response) => {
@@ -375,7 +380,10 @@ export function RouletteVirtualBoard({
       )
     }, effectiveDelay)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      claimedStepRef.current = -1  // release claim without dispatching — next window can retry
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [evolutionBettingOpen, loaded, isTracking, selectedChip, simulation.steps.length])
   // ^ placementMap/roundMultiplier/nextBet/betDelay intentionally omitted from deps —
@@ -636,14 +644,14 @@ export function RouletteVirtualBoard({
             </div>
           </div>
 
-          <div className='mt-4 grid grid-cols-[42px_1fr] rounded-s-lg rounded-e-sm gap-0.5 bg-white/40'>
+          <div className='mt-4 grid grid-cols-[28px_1fr] rounded-s-lg rounded-e-sm gap-0.5 bg-white/40'>
             <button
               type='button'
               disabled={!selectedChip}
               title='Place zero bet on Evolution'
               onClick={() => placeEvolutionBets([0])}
               className={cn(
-                'relative flex items-center justify-center rounded-s-lg rounded-e-sm border font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all disabled:cursor-default',
+                'relative flex items-center justify-center rounded-s-lg rounded-e-xs border font-semibold transition-all disabled:cursor-default',
                 getNumberTone(0),
                 selectedChip && 'cursor-pointer hover:border-white',
                 nextBet.zeroStake > 0 && 'ring-2 ring-emerald-300/75 ring-offset-2 ring-offset-slate-950',
@@ -714,7 +722,7 @@ export function RouletteVirtualBoard({
                             : undefined
                         }
                         className={cn(
-                          'mr-0.75 relative h-12 w-12 flex items-center justify-center aspect-square rounded-xs border disabled:cursor-default',
+                          'mr-0.75 relative h-8.75 w-8.75 flex items-center justify-center aspect-square rounded-xs border disabled:cursor-default',
                           'transition-all duration-100 ease-in-out ',
                           getNumberTone(value),
                           getQuadTone(value, isHoveredQuadrantMember, isActive),
@@ -730,7 +738,7 @@ export function RouletteVirtualBoard({
                         {isActive && effectiveMultiplier > 1 ? (
                           <span
                             className={cn(
-                              'absolute right-0 top-0 rounded-full bg-amber-200 size-4 text-center text-[8px] font-bold uppercase -tracking-widest text-slate-950',
+                              'absolute -right-1 -top-1 z-9999 rounded-xs bg-blue-200 size-3.5 text-center text-[7px] font-medium uppercase -tracking-widest text-slate-950',
                               {
                                 'bg-indigo-400 text-white': effectiveMultiplier === 4,
                                 'bg-fuchsia-300': effectiveMultiplier === 8
@@ -780,17 +788,17 @@ export function RouletteVirtualBoard({
           <div className='mt-2 grid grid-cols-4 px-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>round</p>
-              <p className='mt-1.5 text-lg font-semibold text-white'>{nextBet.round}</p>
+              <p className='mt-1.5 text-lg font-normal text-white'>{nextBet.round}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>W-streak</p>
-              <p className='mt-2 text-lg font-semibold text-white'>{winStreak}</p>
+              <p className='mt-2 text-lg font-normal text-white'>{winStreak}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
                 spins&middot;({winningNumbers.length})
               </p>
-              <p className='mt-2 text-lg font-semibold text-white'>{simulation.steps.length}</p>
+              <p className='mt-2 text-lg font-normal text-white'>{simulation.steps.length}</p>
             </Stat>
             <Stat>
               <div className='flex items-center justify-between gap-1'>
@@ -821,7 +829,7 @@ export function RouletteVirtualBoard({
           <div className='grid grid-cols-5 mt-1 px-1 pb-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Next</p>
-              <p className='mt-1.5 text-lg font-semibold text-white'>{fmtAmt(nextBet.totalStake)}</p>
+              <p className='mt-1.5 text-lg font-normal text-white'>{fmtAmt(nextBet.totalStake)}</p>
 
               <p className='hidden mt-1 text-xs text-slate-400'>
                 Unit {nextBet.unitStake} · x{roundMultiplier}
@@ -833,17 +841,17 @@ export function RouletteVirtualBoard({
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Staked</p>
-              <p className='mt-1.5 text-lg font-semibold text-white'>{fmtAmt(totalStaked)}</p>
+              <p className='mt-1.5 text-lg font-normal text-white'>{fmtAmt(totalStaked)}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
                 Take &middot; <span className='tracking-normal text-emerald-400 font-semibold'>{winAmount}</span>
               </p>
-              <p className='mt-1.5 text-lg font-semibold text-yellow-300'>{fmtAmt(winAmount - totalStaked)}</p>
+              <p className='mt-1.5 text-lg font-normal text-yellow-300'>{fmtAmt(winAmount - totalStaked)}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>PCT</p>
-              <p className='mt-1.5 text-lg font-semibold text-indigo-300'>
+              <p className='mt-1.5 text-lg font-normal text-indigo-300'>
                 {(((winAmount - totalStaked) / (baseUnit * 288)) * 100).toFixed(2)}
                 <span className='text-[7px]'>%</span>
               </p>
@@ -852,7 +860,7 @@ export function RouletteVirtualBoard({
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
                 cvg &middot; ({nextBet.coverageCount})
               </p>
-              <p className='mt-1.5 text-lg font-semibold text-white'>
+              <p className='mt-1.5 text-lg font-normal text-white'>
                 {nextBet.coveragePercent.toFixed(2)}
                 <span className='text-[7px]'>%</span>
               </p>

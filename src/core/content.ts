@@ -69,20 +69,27 @@ async function processCapturedPayload(responseData: InterceptedNetworkPayload): 
     const rouletteResult = parseRouletteResult(responseData)
     if (rouletteResult) {
       await saveRouletteResult(rouletteResult)
-      console.log('Roulette spin saved:', rouletteResult)
       return
+    }
+
+    const historyItems = extractBet88HistoryFeed(responseData)
+    if (historyItems) {
+      const parsed = historyItems
+        .map((item) => parseBet88HistoryItem(item, responseData.timestamp ?? Date.now()))
+        .filter((item): item is GameResult => item !== null)
+      if (parsed.length > 0) {
+        await saveGameResults(parsed)
+        return
+      }
     }
 
     const result = parseGameResult(responseData)
 
-    if (!result) {
-      return
-    }
+    if (!result) return
 
     await saveGameResult(result)
-    console.log('Casino game result saved:', result)
   } catch (error) {
-    console.error('Error processing game result:', error)
+    console.error('[WW] error processing payload:', error)
   }
 }
 
@@ -172,7 +179,7 @@ function isStakeKenoState(value: unknown): value is StakeKeno {
 }
 
 function isStakeLimboState(value: unknown): value is StakeLimbo {
-  return isRecord(value) && typeof value.result === 'number' && typeof value.multiplierTarget === 'number'
+  return isRecord(value) && typeof value.result === 'number'
 }
 
 function isStakeDiceState(value: unknown): value is StakeDice {
@@ -215,15 +222,164 @@ function isStakeMinesCashOutState(value: unknown): value is StakeMinesCashOut {
 function isBet88Base(value: unknown): value is Bet88<unknown> {
   return (
     isRecord(value) &&
-    typeof value.roundId === 'number' &&
-    typeof value.win === 'boolean' &&
-    typeof value.active === 'boolean' &&
-    typeof value.multiplier === 'number' &&
-    typeof value.winAmount === 'string' &&
-    typeof value.profit === 'string' &&
-    typeof value.playerId === 'number' &&
-    'custom' in value
+    (typeof value.roundId === 'number' || typeof value.roundId === 'string') &&
+    (typeof value.win === 'boolean' || typeof value.win === 'number') &&
+    (typeof value.active === 'boolean' || typeof value.active === 'number') &&
+    (value.multiplier === null || value.multiplier === undefined || typeof value.multiplier === 'number') &&
+    (value.winAmount === null || value.winAmount === undefined || typeof value.winAmount === 'string' || typeof value.winAmount === 'number')
   )
+}
+
+// ── Bet88 history feed ────────────────────────────────────────────────────────
+// bet88.ph game endpoints return a paginated results list rather than a single
+// bet response. Shape: { nrOfResults: number, items: Bet88HistoryItem[] }
+
+interface Bet88HistoryItem {
+  game: string
+  roundId: number | string
+  user: string
+  currency: string
+  dateTime: string
+  betAmount: string
+  payout: string
+  multiplier: number
+}
+
+function isBet88HistoryItem(value: unknown): value is Bet88HistoryItem {
+  return (
+    isRecord(value) &&
+    typeof value.game === 'string' &&
+    (typeof value.roundId === 'number' || typeof value.roundId === 'string') &&
+    typeof value.user === 'string' &&
+    typeof value.currency === 'string' &&
+    typeof value.dateTime === 'string' &&
+    typeof value.betAmount === 'string' &&
+    typeof value.payout === 'string' &&
+    typeof value.multiplier === 'number'
+  )
+}
+
+function isBet88HistoryFeed(value: unknown): value is { nrOfResults: number; items: Bet88HistoryItem[] } {
+  return (
+    isRecord(value) &&
+    typeof value.nrOfResults === 'number' &&
+    Array.isArray(value.items) &&
+    value.items.length > 0 &&
+    isBet88HistoryItem(value.items[0])
+  )
+}
+
+function mapBet88HistoryGame(name: string): SupportedGameKey | null {
+  switch (name.toLowerCase()) {
+    case 'keno':
+      return 'keno'
+    case 'limbo':
+      return 'limbo'
+    case 'dice':
+      return 'dice'
+    case 'mines':
+      return 'mines'
+    default:
+      return null
+  }
+}
+
+function parseBet88HistoryItem(item: Bet88HistoryItem, fallbackTimestamp: number): GameResult | null {
+  const game = mapBet88HistoryGame(item.game)
+  if (!game) return null
+
+  const amount = toNumber(item.betAmount)
+  const payout = toNumber(item.payout)
+  const profit = amount !== undefined && payout !== undefined ? payout - amount : undefined
+  const result = resolveFinancialOutcome({ amount, payout, profit, fallbackWin: item.multiplier > 0 })
+  const timestamp = parseTimestamp(item.dateTime) ?? fallbackTimestamp
+  const roundId = typeof item.roundId === 'number' ? item.roundId : Number(item.roundId) || 0
+
+  const syntheticBase = {
+    roundId,
+    win: result === 'win',
+    active: false as const,
+    multiplier: item.multiplier,
+    winAmount: item.payout,
+    profit: String(profit ?? 0),
+    playerId: 0
+  }
+
+  const baseResult = {
+    timestamp,
+    result,
+    provider: 'bet88' as const,
+    game,
+    amount,
+    payout,
+    profit,
+    currency: item.currency,
+    roundId,
+    active: false,
+    multiplier: item.multiplier,
+    userName: item.user,
+    url: window.location.href
+  }
+
+  switch (game) {
+    case 'limbo':
+      return {
+        ...baseResult,
+        action: 'bet',
+        providerData: {
+          provider: 'bet88',
+          game: 'limbo',
+          action: 'bet',
+          response: { ...syntheticBase, custom: { multiplier: item.multiplier, winningChance: 0 } }
+        }
+      }
+
+    case 'keno':
+      return {
+        ...baseResult,
+        action: 'bet',
+        providerData: {
+          provider: 'bet88',
+          game: 'keno',
+          action: 'bet',
+          response: { ...syntheticBase, custom: { drawNumbers: [], numberOfMatches: 0 } }
+        }
+      }
+
+    case 'dice':
+      return {
+        ...baseResult,
+        action: 'bet',
+        providerData: {
+          provider: 'bet88',
+          game: 'dice',
+          action: 'bet',
+          response: { ...syntheticBase, custom: { result: '0', winningChance: '0' } }
+        }
+      }
+
+    case 'mines':
+      return {
+        ...baseResult,
+        action: 'play',
+        providerData: {
+          provider: 'bet88',
+          game: 'mines',
+          action: 'play',
+          response: { ...syntheticBase, custom: { selected: [], mines: [], mineCount: 0 } }
+        }
+      }
+  }
+}
+
+function extractBet88HistoryFeed(payload: InterceptedNetworkPayload): Bet88HistoryItem[] | null {
+  const candidates = [payload.data, isRecord(payload.data) ? payload.data.data : undefined]
+  for (const candidate of candidates) {
+    if (isBet88HistoryFeed(candidate)) {
+      return candidate.items
+    }
+  }
+  return null
 }
 
 function isRouletteResultEntry(value: unknown): value is { number: string } {
@@ -287,18 +443,13 @@ function normalizeBet88KenoCustom(value: unknown): Bet88Keno | null {
 }
 
 function normalizeBet88LimboCustom(value: unknown, fallbackMultiplier?: number): Bet88Limbo | null {
-  if (!isRecord(value)) {
-    return null
-  }
-
-  const multiplier = toNumber(value.multiplier) ?? fallbackMultiplier
+  const multiplier = isRecord(value) ? (toNumber(value.multiplier) ?? fallbackMultiplier) : fallbackMultiplier
   if (multiplier === undefined) {
     return null
   }
-
   return {
     multiplier,
-    winningChance: toNumber(value.winningChance) ?? 0
+    winningChance: isRecord(value) ? (toNumber(value.winningChance) ?? 0) : 0
   }
 }
 
@@ -485,11 +636,16 @@ function detectBet88Route(
 
 function parseStakeResult(payload: InterceptedNetworkPayload): GameResult | null {
   const providerData = extractStakePayload(payload)
-  if (!providerData || providerData.active) {
-    return null
-  }
+  if (!providerData) return null
 
   const route = detectStakeRoute(payload.url, providerData)
+
+  // Mines rounds are multi-step; skip interim active states.
+  // Instant games (limbo, dice, keno) settle on the first response even when
+  // active=true, so we let them through — the dedup logic in saveGameResult
+  // will keep the settled version if a second inactive response arrives.
+  if (providerData.active && route.game === 'mines') return null
+
   const payout = resolveStakePayout(route.game, providerData.amount, providerData.payout, providerData.payoutMultiplier)
   const profit = payout - providerData.amount
   const result = resolveFinancialOutcome({
@@ -602,9 +758,7 @@ function parseStakeResult(payload: InterceptedNetworkPayload): GameResult | null
 
 function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null {
   const providerData = extractBet88Payload(payload)
-  if (!providerData) {
-    return null
-  }
+  if (!providerData) return null
 
   const route = detectBet88Route(payload.url, providerData)
   if (!route) {
@@ -613,16 +767,17 @@ function parseBet88Result(payload: InterceptedNetworkPayload): GameResult | null
 
   const requestBody = isRecord(payload.requestBody) ? payload.requestBody : null
   const payout = toNumber(providerData.winAmount)
+  const amount = toNumber(requestBody?.amount)
   const profit =
-    toNumber(providerData.profit) ?? (payout !== undefined ? payout : 0) - (toNumber(requestBody?.amount) ?? 0)
-  const amount =
-    toNumber(requestBody?.amount) ??
-    (payout !== undefined && profit !== undefined ? Math.max(0, payout - profit) : undefined)
+    payout !== undefined && amount !== undefined
+      ? payout - amount
+      : toNumber(providerData.profit)
+  const win = typeof providerData.win === 'boolean' ? providerData.win : providerData.win !== 0
   const result = resolveFinancialOutcome({
     amount,
     payout,
     profit,
-    fallbackWin: providerData.win
+    fallbackWin: win
   })
 
   const baseResult = {
@@ -896,6 +1051,45 @@ function findExistingRouletteResultIndex(results: RouletteSpinResult[], candidat
   return results.findIndex(
     (entry) => entry.id === candidate.id && entry.provider === candidate.provider && entry.source === candidate.source
   )
+}
+
+async function saveGameResults(candidates: GameResult[]): Promise<void> {
+  if (candidates.length === 0) return
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['casinoResults', 'virtualBankroll'], (data) => {
+      const virtualBankroll = normalizeVirtualBankroll(data.virtualBankroll)
+      const stored = normalizeStoredData(data.casinoResults, virtualBankroll)
+      let results = [...stored.results]
+
+      for (const candidate of candidates) {
+        const nextResult = applyPaperBankrollToRound({
+          ...candidate,
+          paperBankrollEnabled:
+            virtualBankroll.enabled === true &&
+            virtualBankroll.trackingStartedAt !== null &&
+            candidate.timestamp >= virtualBankroll.trackingStartedAt,
+          paperBetAmount: virtualBankroll.enabled === true ? virtualBankroll.baseBetAmount : undefined
+        })
+
+        const existingIndex = findExistingResultIndex(results, nextResult)
+        if (existingIndex >= 0) {
+          const existing = results[existingIndex]
+          if (existing.active === false && nextResult.active === true) continue
+          results[existingIndex] = nextResult
+        } else {
+          results.push(nextResult)
+        }
+      }
+
+      if (results.length > 1000) {
+        results = results.slice(-1000)
+      }
+
+      chrome.storage.local.set({ casinoResults: summarizeResults(results) }, () => {
+        resolve()
+      })
+    })
+  })
 }
 
 async function saveGameResult(result: GameResult): Promise<void> {

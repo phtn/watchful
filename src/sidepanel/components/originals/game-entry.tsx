@@ -28,7 +28,7 @@ export function GameEntry({ game }: GameEntryProps) {
   return (
     <article
       className={cn(
-        'rounded-[18px] p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white [content-visibility:auto]',
+        'rounded-[18px] border border-zinc-700/50 p-4 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.55)] text-white',
         cardClassName
       )}>
       <div className='flex items-start justify-between gap-3'>

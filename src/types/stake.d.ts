@@ -32,7 +32,7 @@ export interface StakeKeno {
 // https://stake.com/_api/casino/limbo/bet
 export interface StakeLimbo {
   result: number
-  multiplierTarget: number
+  multiplierTarget?: number
 }
 
 // DICE

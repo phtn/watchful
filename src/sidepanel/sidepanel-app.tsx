@@ -1,5 +1,4 @@
-// import { GeistPixelCircle } from 'geist/font/pixel'
-import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react'
 import { deriveVirtualBankroll } from '../lib/virtual-bankroll'
 import {
   EMPTY_STORED_DATA,
@@ -49,13 +48,11 @@ const App = () => {
   const [evolutionRecentNumbers, setEvolutionRecentNumbers] = useState<number[]>([])
   const [activeGameClass, setActiveGameClass] = useState<GameClassView>('originals')
   const [showSettings, setShowSettings] = useState(false)
-  const deferredResults = useDeferredValue(stats.results)
+  // ─── loaders ──────────────────────────────────────────────────────────────
 
   const loadStats = () => {
     chrome.storage.local.get(['casinoResults', 'virtualBankroll'], (data) => {
-      startTransition(() => {
-        setStats(normalizeStoredData(data.casinoResults, normalizeVirtualBankroll(data.virtualBankroll)))
-      })
+      setStats(normalizeStoredData(data.casinoResults, normalizeVirtualBankroll(data.virtualBankroll)))
     })
   }
 
@@ -63,32 +60,26 @@ const App = () => {
     chrome.storage.local.get(['devServerPort'], (data) => {
       startTransition(() => {
         const nextPort = getStoredPort(data.devServerPort)
-        setDevServerPort((currentPort) => (currentPort === nextPort ? currentPort : nextPort))
+        setDevServerPort((cur) => (cur === nextPort ? cur : nextPort))
       })
     })
   }
 
   const loadVirtualBankroll = () => {
     chrome.storage.local.get(['virtualBankroll'], (data) => {
-      startTransition(() => {
-        setVirtualBankroll(normalizeVirtualBankroll(data.virtualBankroll))
-      })
+      startTransition(() => setVirtualBankroll(normalizeVirtualBankroll(data.virtualBankroll)))
     })
   }
 
   const loadRouletteResults = () => {
     chrome.storage.local.get(['rouletteResults'], (data) => {
-      startTransition(() => {
-        setRouletteStats(normalizeRouletteStoredData(data.rouletteResults))
-      })
+      startTransition(() => setRouletteStats(normalizeRouletteStoredData(data.rouletteResults)))
     })
   }
 
   const loadTennisResults = () => {
     chrome.storage.local.get(['tennisResults'], (data) => {
-      startTransition(() => {
-        setTennisStats(normalizeTennisStoredData(data.tennisResults))
-      })
+      startTransition(() => setTennisStats(normalizeTennisStoredData(data.tennisResults)))
     })
   }
 
@@ -117,29 +108,105 @@ const App = () => {
     )
   }
 
-  const persistVirtualBankroll = (nextState: VirtualBankrollState) => {
-    chrome.storage.local.set({ virtualBankroll: nextState }, () => {
-      startTransition(() => {
-        setVirtualBankroll(nextState)
-      })
-    })
-  }
+  // ─── stable callbacks ──────────────────────────────────────────────────────
 
-  const requestUrlStatus: VoidFunction = () => {
+  const persistVirtualBankroll = useCallback((nextState: VirtualBankrollState) => {
+    chrome.storage.local.set({ virtualBankroll: nextState }, () => {
+      startTransition(() => setVirtualBankroll(nextState))
+    })
+  }, [])
+
+  const requestUrlStatus = useCallback(() => {
     chrome.runtime.sendMessage({ type: 'REQUEST_URL_STATUS' }, () => {
       if (chrome.runtime.lastError) {
-        const nextStatus: PanelStatus = {
-          connected: false,
-          message: 'Background worker is unavailable.',
-          site: null
-        }
-
+        const nextStatus: PanelStatus = { connected: false, message: 'Background worker is unavailable.', site: null }
         startTransition(() => {
-          setStatus((currentStatus) => (sameStatus(currentStatus, nextStatus) ? currentStatus : nextStatus))
+          setStatus((cur) => (sameStatus(cur, nextStatus) ? cur : nextStatus))
         })
       }
     })
-  }
+  }, [])
+
+  const clearData = useCallback(() => {
+    if (!window.confirm('Clear all tracked game history?')) return
+    chrome.storage.local.remove(['casinoResults', 'rouletteResults', 'tennisResults'], () => {
+      startTransition(() => {
+        setStats(EMPTY_STORED_DATA)
+        setRouletteStats(EMPTY_ROULETTE_STORED_DATA)
+        setTennisStats(EMPTY_TENNIS_STORED_DATA)
+      })
+    })
+  }, [])
+
+  const clearRouletteResults = useCallback(() => {
+    if (!window.confirm('Clear captured roulette spins?')) return
+    chrome.storage.local.remove(['rouletteResults'], () => {
+      startTransition(() => setRouletteStats(EMPTY_ROULETTE_STORED_DATA))
+    })
+  }, [])
+
+  const clearTennisResults = useCallback(() => {
+    if (!window.confirm('Clear captured tennis board data?')) return
+    chrome.storage.local.remove(['tennisResults'], () => {
+      startTransition(() => setTennisStats(EMPTY_TENNIS_STORED_DATA))
+    })
+  }, [])
+
+  const saveDevServerPort = useCallback((port: number) => {
+    const portNum = Math.max(1, Math.min(65535, port))
+    chrome.storage.local.set({ devServerPort: portNum }, () => {
+      startTransition(() => {
+        setDevServerPort(portNum)
+        setShowSettings(false)
+      })
+    })
+  }, [])
+
+  const enableVirtualBankroll = useCallback(
+    (seedBalance: number, baseBetAmount: number) => {
+      persistVirtualBankroll({
+        enabled: true,
+        seedBalance,
+        baseBetAmount,
+        replenishedTotal: 0,
+        trackingStartedAt: Date.now()
+      })
+    },
+    [persistVirtualBankroll]
+  )
+
+  const disableVirtualBankroll = useCallback(() => {
+    persistVirtualBankroll({ ...virtualBankroll, enabled: false })
+  }, [virtualBankroll, persistVirtualBankroll])
+
+  const replenishVirtualBankroll = useCallback(
+    (amount: number) => {
+      persistVirtualBankroll({ ...virtualBankroll, replenishedTotal: virtualBankroll.replenishedTotal + amount })
+    },
+    [virtualBankroll, persistVirtualBankroll]
+  )
+
+  const updateVirtualBankrollBetAmount = useCallback(
+    (amount: number) => {
+      persistVirtualBankroll({ ...virtualBankroll, baseBetAmount: amount })
+    },
+    [virtualBankroll, persistVirtualBankroll]
+  )
+
+  const resetVirtualBankroll = useCallback(() => {
+    if (!window.confirm('Reset the virtual bankroll to its starting balance and restart profit/loss tracking?')) return
+    persistVirtualBankroll({ ...virtualBankroll, enabled: true, replenishedTotal: 0, trackingStartedAt: Date.now() })
+  }, [virtualBankroll, persistVirtualBankroll])
+
+  const onGameClassChange = useCallback(() => {
+    const order: GameClassView[] = ['originals', 'roulette', 'tennis']
+    setActiveGameClass((cur) => order[(order.indexOf(cur) + 1) % order.length])
+  }, [])
+
+  const toggleSimulated = useCallback(() => setSimulated((prev) => !prev), [])
+  const toggleShowSettings = useCallback(() => setShowSettings((prev) => !prev), [])
+
+  // ─── effect ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     loadStats()
@@ -150,32 +217,17 @@ const App = () => {
     loadEvolutionChips()
 
     const storageListener = (changes: { [key: string]: chrome.storage.StorageChange }, namespace: string) => {
-      if (namespace === 'local' && changes.casinoResults) {
-        loadStats()
-      }
-
-      if (namespace === 'local' && changes.devServerPort) {
-        loadDevServerPort()
-      }
-
-      if (namespace === 'local' && changes.virtualBankroll) {
-        loadVirtualBankroll()
-      }
-
-      if (namespace === 'local' && changes.rouletteResults) {
-        loadRouletteResults()
-      }
-
-      if (namespace === 'local' && changes.tennisResults) {
-        loadTennisResults()
-      }
-
+      if (namespace !== 'local') return
+      if (changes.casinoResults) loadStats()
+      if (changes.devServerPort) loadDevServerPort()
+      if (changes.virtualBankroll) loadVirtualBankroll()
+      if (changes.rouletteResults) loadRouletteResults()
+      if (changes.tennisResults) loadTennisResults()
       if (
-        namespace === 'local' &&
-        (changes.evolutionChips ||
-          changes.evolutionRebetVisible ||
-          changes.evolutionBettingOpen ||
-          changes.evolutionRecentNumbers)
+        changes.evolutionChips ||
+        changes.evolutionRebetVisible ||
+        changes.evolutionBettingOpen ||
+        changes.evolutionRecentNumbers
       ) {
         loadEvolutionChips()
       }
@@ -188,10 +240,7 @@ const App = () => {
       siteLabel?: string | null
       url?: string | null
     }) => {
-      if (message.type !== 'URL_STATUS') {
-        return
-      }
-
+      if (message.type !== 'URL_STATUS') return
       const nextStatus: PanelStatus = message.isTargetSite
         ? {
             connected: true,
@@ -205,10 +254,7 @@ const App = () => {
             site: null,
             url: message.url || undefined
           }
-
-      startTransition(() => {
-        setStatus((currentStatus) => (sameStatus(currentStatus, nextStatus) ? currentStatus : nextStatus))
-      })
+      startTransition(() => setStatus((cur) => (sameStatus(cur, nextStatus) ? cur : nextStatus)))
     }
 
     chrome.storage.onChanged.addListener(storageListener)
@@ -220,141 +266,43 @@ const App = () => {
       loadRouletteResults()
       loadTennisResults()
       loadEvolutionChips()
-    }, 4000)
+    }, 1000)
 
     return () => {
       window.clearInterval(interval)
       chrome.storage.onChanged.removeListener(storageListener)
       chrome.runtime.onMessage.removeListener(messageListener)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const clearData: VoidFunction = () => {
-    if (!window.confirm('Clear all tracked game history?')) {
-      return
-    }
+  // ─── derived values ────────────────────────────────────────────────────────
 
-    chrome.storage.local.remove(['casinoResults', 'rouletteResults', 'tennisResults'], () => {
-      startTransition(() => {
-        setStats(EMPTY_STORED_DATA)
-        setRouletteStats(EMPTY_ROULETTE_STORED_DATA)
-        setTennisStats(EMPTY_TENNIS_STORED_DATA)
-      })
-    })
-  }
+  const recentResults = useMemo(() => stats.results.slice(-18).reverse(), [stats.results])
 
-  const clearRouletteResults = () => {
-    if (!window.confirm('Clear captured roulette spins?')) {
-      return
-    }
-
-    chrome.storage.local.remove(['rouletteResults'], () => {
-      startTransition(() => {
-        setRouletteStats(EMPTY_ROULETTE_STORED_DATA)
-      })
-    })
-  }
-
-  const clearTennisResults = () => {
-    if (!window.confirm('Clear captured tennis board data?')) {
-      return
-    }
-
-    chrome.storage.local.remove(['tennisResults'], () => {
-      startTransition(() => {
-        setTennisStats(EMPTY_TENNIS_STORED_DATA)
-      })
-    })
-  }
-
-  const saveDevServerPort = (port: number) => {
-    const portNum = Math.max(1, Math.min(65535, port))
-    chrome.storage.local.set({ devServerPort: portNum }, () => {
-      startTransition(() => {
-        setDevServerPort(portNum)
-        setShowSettings(false)
-      })
-    })
-  }
-
-  const enableVirtualBankroll = (seedBalance: number, baseBetAmount: number) => {
-    persistVirtualBankroll({
-      enabled: true,
-      seedBalance,
-      baseBetAmount,
-      replenishedTotal: 0,
-      trackingStartedAt: Date.now()
-    })
-  }
-
-  const disableVirtualBankroll: VoidFunction = () => {
-    persistVirtualBankroll({
-      ...virtualBankroll,
-      enabled: false
-    })
-  }
-
-  const replenishVirtualBankroll = (amount: number) => {
-    persistVirtualBankroll({
-      ...virtualBankroll,
-      replenishedTotal: virtualBankroll.replenishedTotal + amount
-    })
-  }
-
-  const updateVirtualBankrollBetAmount = (amount: number) => {
-    persistVirtualBankroll({
-      ...virtualBankroll,
-      baseBetAmount: amount
-    })
-  }
-
-  const resetVirtualBankroll = () => {
-    if (!window.confirm('Reset the virtual bankroll to its starting balance and restart profit/loss tracking?')) {
-      return
-    }
-
-    persistVirtualBankroll({
-      ...virtualBankroll,
-      enabled: true,
-      replenishedTotal: 0,
-      trackingStartedAt: Date.now()
-    })
-  }
-
-  const recentResults = deferredResults.slice(-18).reverse()
   const latestGame = recentResults[0]
-  const totalStaked = stats.results.reduce((sum, game) => sum + (game.amount ?? 0), 0)
-  const netProfit = stats.results.reduce((sum, game) => {
-    const profit =
-      game.profit ?? (game.payout !== undefined && game.amount !== undefined ? game.payout - game.amount : 0)
-    return sum + profit
-  }, 0)
-  const bankrollSnapshot = deriveVirtualBankroll(virtualBankroll, deferredResults)
-  const onGameClassChange = useCallback(() => {
-    const order: GameClassView[] = ['originals', 'roulette', 'tennis']
 
-    setActiveGameClass((currentValue) => {
-      const currentIndex = order.indexOf(currentValue)
-      return order[(currentIndex + 1) % order.length]
-    })
-  }, [])
+  const totalStaked = useMemo(() => stats.results.reduce((sum, game) => sum + (game.amount ?? 0), 0), [stats.results])
 
-  const toggleSimulated = useCallback(() => {
-    setSimulated((prev) => !prev)
-  }, [])
+  const netProfit = useMemo(
+    () =>
+      stats.results.reduce((sum, game) => {
+        const profit =
+          game.profit ?? (game.payout !== undefined && game.amount !== undefined ? game.payout - game.amount : 0)
+        return sum + profit
+      }, 0),
+    [stats.results]
+  )
+
+  const bankrollSnapshot = useMemo(
+    () => deriveVirtualBankroll(virtualBankroll, stats.results),
+    [virtualBankroll, stats.results]
+  )
+
+  // ─── prop bundles ──────────────────────────────────────────────────────────
 
   const pulseProps = useMemo(
-    () => ({
-      requestUrlStatus: requestUrlStatus,
-      clearData: clearData,
-      totalStaked: totalStaked,
-      netProfit: netProfit,
-      latestGame: latestGame,
-      getNetTone: getNetTone,
-      simulated: simulated,
-      toggleSimulated: toggleSimulated
-    }),
-    [requestUrlStatus, clearData, totalStaked, netProfit, latestGame, getNetTone, simulated, toggleSimulated]
+    () => ({ requestUrlStatus, clearData, totalStaked, netProfit, snapshot: bankrollSnapshot, latestGame, getNetTone, simulated, toggleSimulated }),
+    [requestUrlStatus, clearData, totalStaked, netProfit, bankrollSnapshot, latestGame, simulated, toggleSimulated]
   )
 
   const vrBankProps = useMemo(
@@ -363,7 +311,6 @@ const App = () => {
       snapshot: bankrollSnapshot,
       onEnable: enableVirtualBankroll,
       onDisable: disableVirtualBankroll,
-      onUpdateBetAmount: updateVirtualBankrollBetAmount,
       onReplenish: replenishVirtualBankroll,
       onReset: resetVirtualBankroll,
       onUpdateBaseBetAmount: updateVirtualBankrollBetAmount
@@ -373,18 +320,17 @@ const App = () => {
       bankrollSnapshot,
       enableVirtualBankroll,
       disableVirtualBankroll,
-      updateVirtualBankrollBetAmount,
       replenishVirtualBankroll,
       resetVirtualBankroll,
       updateVirtualBankrollBetAmount
     ]
   )
 
-  const toggleShowSettings = () => setShowSettings((value) => !value)
+  // ─── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`min-h-screen text-slate-950 bg-[#282828] antialiased`}>
-      <div className='mx-auto flex max-w-4xl flex-col'>
+    <div className='min-h-screen text-slate-950 bg-[#282828] antialiased'>
+      <div className='mx-auto flex max-w-xl flex-col'>
         <MainHeader
           status={status}
           stats={stats}
@@ -401,9 +347,6 @@ const App = () => {
             pulseProps={pulseProps}
             vrBankProps={vrBankProps}
             recentResults={recentResults}
-            onReset={clearData}
-            simulated={simulated}
-            toggleSimulated={toggleSimulated}
             toggleShowSettings={toggleShowSettings}
             settingsVisible={showSettings}
             setDevServerPort={setDevServerPort}
@@ -413,21 +356,17 @@ const App = () => {
             stats={stats}
           />
         ) : activeGameClass === 'roulette' ? (
-          <div className=''>
-            <RouletteWorkspace
-              status={status}
-              stats={rouletteStats}
-              evolutionChips={evolutionChips}
-              evolutionRebetVisible={evolutionRebetVisible}
-              evolutionBettingOpen={evolutionBettingOpen}
-              evolutionRecentNumbers={evolutionRecentNumbers}
-              onReset={clearRouletteResults}
-            />
-          </div>
+          <RouletteWorkspace
+            status={status}
+            stats={rouletteStats}
+            evolutionChips={evolutionChips}
+            evolutionRebetVisible={evolutionRebetVisible}
+            evolutionBettingOpen={evolutionBettingOpen}
+            evolutionRecentNumbers={evolutionRecentNumbers}
+            onReset={clearRouletteResults}
+          />
         ) : (
-          <div className=''>
-            <TennisWorkspace status={status} stats={tennisStats} onReset={clearTennisResults} />
-          </div>
+          <TennisWorkspace status={status} stats={tennisStats} onReset={clearTennisResults} />
         )}
       </div>
     </div>

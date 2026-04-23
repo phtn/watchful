@@ -64,6 +64,8 @@
   --color-c5: var(--c5);
   --color-c6: var(--c6);
   --color-zero: var(--zero);
+  --color-avocado: var(--avocado);
+  --color-mage: var(--mage);
 }
 
 :root {
@@ -89,6 +91,8 @@
   --c6: #1a1a1a;
   --c7: #8548b0;
   --zero: #166958;
+  --avocado: #46d266;
+  --mage: #c208fc;
 }
 
 * {

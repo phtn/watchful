@@ -3,7 +3,7 @@ import { BLACK_NUMBERS, ORPHELINS_G, RED_NUMBERS, TIER_G, VOISINS_G } from '../.
 import { cn } from '../../../lib/utils'
 import { ClassName } from '../../../types'
 
-export const cardClassName: ClassName = `border-zinc-800  bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]`
+export const cardClassName: ClassName = `border-zinc-800 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]`
 
 type AnalyticsProps = {
   winningNumbers?: readonly number[]
@@ -128,8 +128,8 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
       <div className='mx-auto space-y-2'>
         {/* Hot & Cold Numbers */}
         <div className={cn('grid grid-cols-2 gap-1', cardClassName)}>
-          <div className={cn('rounded-lg p-4')}>
-            <div className='flex flex-wrap gap-3'>
+          <div className={cn('rounded-lg p-2')}>
+            <div className='flex flex-wrap gap-1'>
               <div className='-rotate-90 p-0.5 rounded-sm text-orange-300 text-xs h-4'>
                 <span className='font-bold uppercase'>hot</span>
               </div>
@@ -143,8 +143,8 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
             </div>
           </div>
 
-          <div className={cn('rounded-lg p-4')}>
-            <div className='flex flex-wrap gap-3'>
+          <div className={cn('rounded-lg p-2')}>
+            <div className='flex flex-wrap gap-1'>
               <div className='-rotate-90 p-0.5 rounded-sm text-cyan-400 text-xs h-4'>
                 <span className='font-bold uppercase'>cold</span>
               </div>
@@ -169,21 +169,21 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           <VPctBar
             label='1st (1-12)'
             percentage={stats.dozens[0].pct}
-            color='bg-linear-to-b from-cyan-300 to-cyan-300/50'
+            color='bg-linear-to-b from-cyan-300/50 to-cyan-500'
             count={stats.dozens[0].count}
             cols='col-span-3'
           />
           <VPctBar
             label='2nd (13-24)'
             percentage={stats.dozens[1].pct}
-            color='bg-linear-to-b from-sky-300/50 to-sky-300'
+            color='bg-linear-to-b from-sky-300/50 to-sky-500'
             count={stats.dozens[1].count}
             cols='col-span-3'
           />
           <VPctBar
             label='3rd (25-36)'
             percentage={stats.dozens[2].pct}
-            color='bg-linear-to-b from-blue-300 to-blue-300/50'
+            color='bg-linear-to-b from-blue-300/50 to-blue-500'
             count={stats.dozens[2].count}
             cols='col-span-3'
           />
@@ -419,12 +419,12 @@ const NumberBadge: FC<NumberBadgeProps> = ({ number, count, isHot = true, showCo
   return (
     <div className='relative group'>
       <div
-        className={`w-9 h-8 ${getColor(number)} rounded-md flex items-center justify-center font-bold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
+        className={`w-7 h-7 ${getColor(number)} rounded-sm flex items-center justify-center font-semibold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
         <span className='font-bold text-base'>{number}</span>
       </div>
       {showCount && (
         <div
-          className={`absolute -top-px -right-px w-3.5 h-3.5 rounded-xs flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
+          className={`absolute -top-1 -right-0.5 w-3.5 h-3.5 rounded-xs flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
           {count}
         </div>
       )}

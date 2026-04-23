@@ -79,13 +79,13 @@ export const ChipStack = ({ chipsDetected, onChipSelect, onUndo, onRebet, onDoub
     <div className='' data-role='footer-perspective-chip-stack' data-is-collapsed='true'>
       <div className='' data-role='chip-stack-wrapper'>
         <div
-          className='bg-orange-100/0 py-4 flex items-center justify-center space-x-8'
+          className='bg-orange-100/0 py-4 flex items-center justify-center space-x-4'
           data-role='expanded-chip-stack-wrapper'>
-          <button className='flex space-x-4' onClick={onUndo} title='Undo last bet'>
+          <button className='flex space-x-2' onClick={onUndo} title='Undo last bet'>
             <Icon name='undo' className='size-6' />
           </button>
 
-          <div data-role='chip-stack' className='flex space-x-4'>
+          <div data-role='chip-stack' className='flex space-x-2'>
             {chips.map((chip) => (
               <Chip key={chip.id} {...chip} onClick={onChipSelect(chip.value)} />
             ))}
@@ -100,7 +100,7 @@ export const ChipStack = ({ chipsDetected, onChipSelect, onUndo, onRebet, onDoub
             </button>
           )}
 
-          <button className='flex items-center space-x-4' onClick={onDouble} title='Double bets'>
+          <button className='flex items-center space-x-2' onClick={onDouble} title='Double bets'>
             <span className='text-lg'>2x</span>
           </button>
 

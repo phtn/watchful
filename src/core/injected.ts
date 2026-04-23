@@ -41,7 +41,11 @@
   }
 
   function looksLikeBet88Result(value: unknown): boolean {
-    return isRecord(value) && typeof value.roundId === 'number' && typeof value.win === 'boolean'
+    return (
+      isRecord(value) &&
+      (typeof value.roundId === 'number' || typeof value.roundId === 'string') &&
+      (typeof value.win === 'boolean' || typeof value.win === 'number')
+    )
   }
 
   function looksLikeStakeBetPayload(value: unknown): boolean {
@@ -430,23 +434,7 @@
       const el = deepQuery(document, selector)
       const parent = el?.closest<HTMLElement>('[class*="chipItem"]') ?? el?.parentElement
       const visible = el ? el.offsetParent !== null || el.offsetWidth > 0 : false
-      const hasShadow = document.querySelector('#root')?.shadowRoot !== null
-      // Also try plain querySelector for comparison
-      const plainEl = document.querySelector<HTMLElement>(selector)
-      const allChips = document.querySelectorAll('[data-role="chip"]')
-      const allDataRole = document.querySelectorAll('[data-role]')
-      console.log('[EVO_CLICK]', selector, {
-        found: !!el,
-        plainFound: !!plainEl,
-        tag: el?.tagName,
-        visible,
-        hasShadow,
-        allChipsCount: allChips.length,
-        allDataRoleCount: allDataRole.length,
-        rootChildren: document.querySelector('#root')?.children.length,
-        bodyChildren: document.body?.children.length,
-        frame: window.location.href
-      })
+      console.log('[EVO_CLICK]', selector, { found: !!el, visible, frame: window.location.href })
       if (el) {
         fullClick(parent && parent !== el ? parent : el)
         fullClick(el)
@@ -460,5 +448,4 @@
     }
   })
 
-  console.log('Casino game interceptor injected successfully')
 })()

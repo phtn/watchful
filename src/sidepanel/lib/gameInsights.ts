@@ -15,6 +15,14 @@ export interface GameInsights {
 }
 
 export function getGameInsights(game: GameResult): GameInsights {
+  try {
+    return _getGameInsights(game)
+  } catch {
+    return { chips: [], tracks: [] }
+  }
+}
+
+function _getGameInsights(game: GameResult): GameInsights {
   const chips: string[] = []
   const tracks: GameInsightTrack[] = []
 
@@ -49,7 +57,9 @@ export function getGameInsights(game: GameResult): GameInsights {
 
     if (game.providerData.game === 'limbo') {
       // chips.push(`Bet x${formatScalar(game.providerData.response.state.betAmount)}`)
-      chips.push(`Target ${formatScalar(game.providerData.response.state.multiplierTarget)}`)
+      if (game.providerData.response.state.multiplierTarget !== undefined) {
+        chips.push(`Target ${formatScalar(game.providerData.response.state.multiplierTarget)}`)
+      }
       chips.push(`Result ${formatScalar(game.providerData.response.state.result)}`)
       return { chips, tracks }
     }

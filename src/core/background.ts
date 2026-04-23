@@ -138,13 +138,7 @@ async function trustedClickBySelector(tabId: number, selector: string): Promise<
 
     await dispatchTrustedClickAt(tabId, coords.x, coords.y)
 
-    console.log('[watchful-wind] trusted click', {
-      selector,
-      x: coords.x,
-      y: coords.y,
-      frame: coords.frame
-    })
-
+    console.log('[evo] click', selector, `(${coords.x}, ${coords.y}) frame=${coords.frame}`)
     return { ok: true, x: coords.x, y: coords.y }
   } catch (error) {
     return { ok: false, error: String(error) }
@@ -329,9 +323,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         const placed: number[] = []
-        const missed: number[] = []
+        let missed: number[] = []
 
-        console.log(`[watchful-wind] Bet loop start — ${numbers.length} clicks, chip ${chipValue}`)
+        console.log(`[evo] bet loop — ${numbers.length} spots, chip ${chipValue}`)
 
         for (const num of numbers) {
           const result = await trustedClickBySelector(activeTab.id, `[data-bet-spot-id="${num}"]`)
@@ -341,10 +335,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             missed.push(num)
             console.warn(`[watchful-wind] Bet spot ${num} missed — ${result.error ?? 'unknown error'}`)
           }
-          // delay lets the chip-placement animation complete before the next click.
-          // 140 ms too slow
-          // 130 is OK & 125 si too fast that clicks are missed
-          await new Promise((r) => setTimeout(r, 130))
+          await new Promise((r) => setTimeout(r, 140))
+        }
+
+        // ── Retry pass — reattempt any missed spots up to 3 times ─────────────
+        for (let attempt = 1; attempt <= 3 && missed.length > 0; attempt++) {
+          const toRetry = [...missed]
+          missed = []
+          await new Promise((r) => setTimeout(r, 300))
+          console.log(`[evo] retry pass ${attempt} — ${toRetry.length} spots`)
+          for (const num of toRetry) {
+            const result = await trustedClickBySelector(activeTab.id, `[data-bet-spot-id="${num}"]`)
+            if (result.ok) {
+              placed.push(num)
+              console.log(`[evo] retry ✓ spot ${num}`)
+            } else {
+              missed.push(num)
+              console.warn(`[evo] retry ${attempt} failed spot ${num} — ${result.error ?? 'unknown error'}`)
+            }
+            await new Promise((r) => setTimeout(r, 150))
+          }
         }
 
         // ── Double-button pass ─────────────────────────────────────────────────

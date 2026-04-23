@@ -10,8 +10,8 @@ export interface Metric {
 
 export function HeroMetric({ label, value, className }: Metric) {
   return (
-    <div className={`rounded-md border-[0.5px] border-white/10 bg-white/8 px-2 pt-1 backdrop-blur-md ` + className}>
-      <p className='text-[0.62rem] uppercase tracking-[0.26em] text-cyan-100/65'>{label}</p>
+    <div className={`rounded-md border-[0.5px] border-white/10 px-2 pt-1 backdrop-blur-md ` + className}>
+      <p className='text-[0.62rem] uppercase tracking-[0.26em] text-cyan-100/80'>{label}</p>
       <div className='mt-1 w-full flex items-center justify-between'>
         <p className='text-base font-display font-semibold text-white'>{value}</p>
       </div>
@@ -40,7 +40,7 @@ export function CompactMetric({ data, className }: CompactMetricProps) {
   return (
     <div
       className={
-        `rounded-xl border border-white/10 bg-zinc-800 p-2 backdrop-blur-md grid grid-cols-2 ${cols} gap-2 ` + className
+        `rounded-xl border border-white/10 bg-zinc-800 p-2 backdrop-blur-md grid ${cols} gap-2 ` + className
       }>
       {data.map((metric) => (
         <div key={metric.id} className='not-last:border-r border-white'>
