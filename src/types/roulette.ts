@@ -173,6 +173,8 @@ export function normalizeRouletteStoredData(stored: unknown): RouletteStoredData
   return summarizeRouletteResults(stored.results.filter(isRouletteSpinResult))
 }
 
+export type TableState = 'BETS_OPEN' | 'BETS_CLOSING_SOON' | 'BETS_CLOSED' | 'BETS_CLOSED_ANNOUNCED' | 'GAME_RESOLVED'
+
 /*
 Example:
 {

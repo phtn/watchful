@@ -2,7 +2,7 @@ import { cn } from '../../../lib/utils'
 import type { VirtualBankrollSnapshot } from '../../../lib/virtual-bankroll'
 import { GameResult } from '../../../types'
 import { formatAmount, formatGameLabel, formatSignedAmount, getNetTone } from '../../lib/formatters'
-import { HeroMetric } from './hero-metric'
+import { HeroMetric } from '../shared/hero-metric'
 
 interface PulseProps {
   simulated: boolean
@@ -31,14 +31,14 @@ export const Pulse = ({
   const netClass = simulated ? getNetTone(snapshot.profitLoss) : getNetTone(netProfit)
 
   return (
-    <section className='rounded-t-md border border-[#c208fc] border-b-0 bg-[#c208fc] p-2'>
+    <section className='rounded-md border border-[#c208fc] border-b-0 bg-[#c208fc] p-2'>
       <div className='flex items-center justify-between gap-2'>
-        <div className='flex h-full flex-col justify-end flex-1 space-y-1'>
+        <div className='flex h-full flex-col justify-end flex-1 space-y-1.5'>
           <div className='flex items-center space-x-2'>
             <button
               onClick={requestUrlStatus}
               className={cn(
-                'rounded-full bg-blue-500 text-white flex items-center justify-center size-6 aspect-square font-semibold uppercase active:scale-94 transition-transform duration-200'
+                'rounded-full bg-avocado text-slate-800 flex items-center justify-center size-4 aspect-square font-semibold uppercase active:scale-94 transition-transform duration-200'
               )}>
               R
             </button>
@@ -47,15 +47,19 @@ export const Pulse = ({
           <div className='grid grid-cols-3 gap-1'>
             <button
               onClick={toggleSimulated}
-              className={cn('h-5 rounded-xs text-center text-sm font-semibold text-white', {
+              className={cn('h-5 rounded-xs font-bold font-display text-white text-center text-xs', {
                 'bg-white text-[#c208fc]': simulated
               })}>
               SIM
             </button>
-            <button onClick={requestUrlStatus} className='h-5 rounded-xs text-center text-sm font-semibold text-white'>
+            <button
+              onClick={requestUrlStatus}
+              className='h-5 rounded-xs font-bold font-display text-white text-center text-xs'>
               SCN
             </button>
-            <button onClick={clearData} className='h-5 rounded-xs text-center text-sm font-semibold text-white'>
+            <button
+              onClick={clearData}
+              className='h-5 rounded-xs font-bold font-display text-white text-center text-xs'>
               CLR
             </button>
           </div>

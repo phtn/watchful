@@ -64,8 +64,57 @@ window.addEventListener('message', async (event: MessageEvent) => {
   await processCapturedPayload(responseData)
 })
 
+function extractEvoTableState(payload: InterceptedNetworkPayload): string | null {
+  const data = payload.data
+  if (!isRecord(data) || data.type !== 'roulette.tableState' || !isRecord(data.args)) return null
+  const state = data.args.state
+  if (typeof state !== 'string') return null
+  return state.toUpperCase()
+}
+
+function extractLobbyHistories(payload: InterceptedNetworkPayload): { tableId: string; numbers: number[] }[] | null {
+  const data = payload.data
+  if (!isRecord(data) || data.type !== 'lobby.histories' || !isRecord(data.args)) return null
+  const raw = data.args.histories
+  if (!isRecord(raw)) return null
+
+  const tables: { tableId: string; numbers: number[] }[] = []
+
+  for (const [tableId, tableData] of Object.entries(raw)) {
+    if (!isRecord(tableData)) continue
+    const results = tableData.results
+    if (!Array.isArray(results)) continue
+    const numbers: number[] = []
+    // results is { number: string }[][] — outer array of rounds, inner array of items
+    for (const group of results) {
+      if (!Array.isArray(group)) continue
+      for (const item of group) {
+        if (isRecord(item) && typeof item.number === 'string') {
+          const n = parseInt(item.number, 10)
+          if (Number.isInteger(n) && n >= 0 && n <= 36) numbers.push(n)
+        }
+      }
+    }
+    if (numbers.length > 0) tables.push({ tableId, numbers: numbers.slice(0, 15) })
+  }
+
+  return tables.length > 0 ? tables : null
+}
+
 async function processCapturedPayload(responseData: InterceptedNetworkPayload): Promise<void> {
   try {
+    const tableState = extractEvoTableState(responseData)
+    if (tableState !== null) {
+      chrome.storage.local.set({ evolutionTableState: tableState })
+      return
+    }
+
+    const lobbyHistories = extractLobbyHistories(responseData)
+    if (lobbyHistories !== null) {
+      chrome.storage.local.set({ evolutionLobbyHistories: lobbyHistories })
+      return
+    }
+
     const rouletteResult = parseRouletteResult(responseData)
     if (rouletteResult) {
       await saveRouletteResult(rouletteResult)
@@ -1441,6 +1490,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     sendResponse({ value })
     return false
+  }
+
+  if (message.type === 'PLACE_BET88_BET') {
+    const requestId = `bet88-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const onResult = (event: MessageEvent) => {
+      if (event.source !== window) return
+      if (event.data?.type !== 'BET88_CLICK_RESULT' || event.data?.requestId !== requestId) return
+      window.removeEventListener('message', onResult)
+      sendResponse({ ok: event.data.ok, error: event.data.error })
+    }
+    window.addEventListener('message', onResult)
+    setTimeout(() => {
+      window.removeEventListener('message', onResult)
+      sendResponse({ ok: false, error: 'timeout' })
+    }, 3000)
+    window.postMessage({ type: 'BET88_CLICK', requestId }, '*')
+    return true
   }
 })
 

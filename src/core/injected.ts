@@ -73,6 +73,23 @@
     )
   }
 
+  function looksLikeEvoTableStateMessage(value: unknown): boolean {
+    return (
+      isRecord(value) &&
+      value.type === 'roulette.tableState' &&
+      typeof value.id === 'string' &&
+      isRecord(value.args)
+    )
+  }
+
+  function looksLikeLobbyHistoriesMessage(value: unknown): boolean {
+    return (
+      isRecord(value) &&
+      value.type === 'lobby.histories' &&
+      isRecord(value.args)
+    )
+  }
+
   function looksLikePragmaticRouletteMessage(value: unknown): boolean {
     return (
       isRecord(value) &&
@@ -102,6 +119,8 @@
       looksLikeBet88Result(value) ||
       looksLikeStakeBetPayload(value) ||
       looksLikeEvoRouletteMessage(value) ||
+      looksLikeEvoTableStateMessage(value) ||
+      looksLikeLobbyHistoriesMessage(value) ||
       looksLikePragmaticRouletteMessage(value)
     ) {
       return true
@@ -373,8 +392,13 @@
         socket.addEventListener('message', async (event) => {
           try {
             const { parsed, text } = await captureWebSocketData(event.data)
+            if (parsed == null) return
 
-            if (parsed == null || (!responseLooksGameRelated(parsed) && !(text && hasGameKeyword(text)))) {
+            const isLobbySocket = /\/public\/lobby\/socket\//.test(socket.url)
+            if (isLobbySocket) {
+              // Only forward lobby.histories from the lobby socket — skip everything else
+              if (!isRecord(parsed) || parsed.type !== 'lobby.histories') return
+            } else if (!responseLooksGameRelated(parsed) && !(text && hasGameKeyword(text))) {
               return
             }
 
@@ -413,6 +437,32 @@
   // Listen for click commands from the content script
   window.addEventListener('message', (event) => {
     if (event.source !== window) return
+
+    if (event.data?.type === 'BET88_CLICK') {
+      const { requestId } = event.data as { requestId: string }
+
+      function deepQueryBet88(root: ParentNode, sel: string): HTMLElement | null {
+        const found = root.querySelector<HTMLElement>(sel)
+        if (found) return found
+        const hosts = root.querySelectorAll('*')
+        for (const host of hosts) {
+          if ((host as Element & { shadowRoot: ShadowRoot | null }).shadowRoot) {
+            const inner = deepQueryBet88((host as Element & { shadowRoot: ShadowRoot }).shadowRoot, sel)
+            if (inner) return inner
+          }
+        }
+        return null
+      }
+
+      const el = deepQueryBet88(document, '[part="cta"]')
+      if (el) {
+        fullClick(el)
+        window.postMessage({ type: 'BET88_CLICK_RESULT', requestId, ok: true }, '*')
+      } else {
+        window.postMessage({ type: 'BET88_CLICK_RESULT', requestId, ok: false, error: 'Not found: [part="cta"]' }, '*')
+      }
+      return
+    }
 
     if (event.data?.type === 'EVO_CLICK') {
       const { selector, requestId } = event.data as { selector: string; requestId: string }

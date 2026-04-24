@@ -17,18 +17,18 @@
 }
 
 @font-face {
-  font-family: 'Geist Pixel Square';
-  src: url('./fonts/GeistPixel-Square.woff2') format('woff2');
-  font-weight: 500;
+  font-family: 'OkxSans';
+  src: url('/fonts/okxs-regular.woff2') format('woff2');
+  font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Geist Pixel Circle';
-  src: url('./fonts/GeistPixel-Circle.woff2') format('woff2');
+  font-family: 'OkxSans';
+  src: url('/fonts/okxs-medium.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
-  font-mono: swap;
+  font-display: swap;
 }
 @font-face {
   font-family: 'Geist Pixel Line';
@@ -72,7 +72,7 @@
   --panel-bg: #282828;
   --panel-ink: #102033;
   --panel-muted: #5a6a7d;
-  --font-display: 'Geist Pixel Square', 'Geist Sans', 'Segoe UI', sans-serif;
+  --font-display: 'OkxSans', 'Geist Sans', 'Segoe UI', sans-serif;
   --font-body: 'Geist Sans', 'Segoe UI', 'Helvetica Neue', 'Nimbus Sans', sans-serif;
   --font-mono: 'Geist Mono', 'SFMono-Regular', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
   --font-circ: 'Geist Pixel Circle', sans-serif;

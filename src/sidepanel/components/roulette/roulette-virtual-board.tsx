@@ -1,3 +1,4 @@
+import { TableState } from '@/src/types/roulette'
 import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BOARD_ROWS,
@@ -23,6 +24,7 @@ interface RouletteVirtualBoardProps {
   evolutionChips: number[]
   evolutionRebetVisible: boolean
   evolutionBettingOpen: boolean
+  evolutionTableState: TableState | null
 }
 
 function formatQuadrantLabel(quadrant: KimQuadrantId): string {
@@ -104,7 +106,8 @@ export function RouletteVirtualBoard({
   winningNumbers,
   evolutionChips,
   evolutionRebetVisible,
-  evolutionBettingOpen
+  evolutionBettingOpen,
+  evolutionTableState
 }: RouletteVirtualBoardProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
   const [hoveredQuadrant, setHoveredQuadrant] = useState<KimQuadrantId | null>(null)
@@ -125,7 +128,7 @@ export function RouletteVirtualBoard({
   const [auto, setAuto] = useState(false)
   // Loaded: auto-execute v-board bets on the actual Evolution table each betting window
   const [loaded, setLoaded] = useState(false)
-  // Milliseconds to wait after evolutionBettingOpen fires before sending bets.
+  // Milliseconds to wait after BETS_OPEN table state fires before sending bets.
   // Evolution's DOM takes a moment to render bet spots after the window signal fires.
   const [betDelay, setBetDelay] = useState(600)
   // Bet verification feedback: 'idle' | 'placing' | 'ok' | 'missed'
@@ -318,14 +321,14 @@ export function RouletteVirtualBoard({
   }, [isTracking])
 
   useEffect(() => {
-    if (!loaded || !isTracking || !evolutionBettingOpen) return
+    if (!loaded || !isTracking || evolutionTableState !== 'BETS_OPEN') return
     if (!selectedChip) return // no chip selected yet
     if (nextBet.numbers.length === 0) return // nothing to bet
 
     const currentStep = simulation.steps.length
-    if (lastBetStepRef.current === currentStep) return  // already dispatched for this step
-    if (claimedStepRef.current === currentStep) return  // timer already pending for this step
-    claimedStepRef.current = currentStep                // reserve a pending timer slot
+    if (lastBetStepRef.current === currentStep) return // already dispatched for this step
+    if (claimedStepRef.current === currentStep) return // timer already pending for this step
+    claimedStepRef.current = currentStep // reserve a pending timer slot
 
     setBetStatus('placing')
 
@@ -343,7 +346,7 @@ export function RouletteVirtualBoard({
     const chip = selectedChip
     const round = nextBet.round
     const multiplier = roundMultiplier
-    const effectiveDelay = betDelay + (round === 1 ? 3600 : 2400)
+    const effectiveDelay = 700
 
     console.log(
       `[Load] Scheduling bets in ${effectiveDelay}ms — round ${round}, ${multiplier}x (${doubleCount} doubles), chip ${chip}, ${baseNumbers.length} slot clicks`,
@@ -353,8 +356,8 @@ export function RouletteVirtualBoard({
     // Delay the actual placement so Evolution's bet-spot DOM has time to render
     // after the betting-window signal fires.
     const timer = setTimeout(() => {
-      claimedStepRef.current = -1         // release the pending slot
-      lastBetStepRef.current = currentStep  // mark step as dispatched
+      claimedStepRef.current = -1 // release the pending slot
+      lastBetStepRef.current = currentStep // mark step as dispatched
       chrome.runtime.sendMessage(
         { type: 'PLACE_EVOLUTION_BETS', chipValue: chip, numbers: baseNumbers, doubleCount },
         (response) => {
@@ -382,13 +385,13 @@ export function RouletteVirtualBoard({
 
     return () => {
       clearTimeout(timer)
-      claimedStepRef.current = -1  // release claim without dispatching — next window can retry
+      claimedStepRef.current = -1 // release claim without dispatching — next window can retry
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evolutionBettingOpen, loaded, isTracking, selectedChip, simulation.steps.length])
-  // ^ placementMap/roundMultiplier/nextBet/betDelay intentionally omitted from deps —
+  }, [evolutionTableState, loaded, isTracking, selectedChip, simulation.steps.length])
+  // ^ placementMap/roundMultiplier/nextBet intentionally omitted from deps —
   //   they are snapshotted into locals at fire time. The primary triggers are:
-  //   • evolutionBettingOpen  — window opens for a new round
+  //   • evolutionTableState === 'BETS_OPEN'  — window opens for a new round
   //   • simulation.steps.length — a new round has been logged (succeeding rounds)
 
   const handleTrackingToggle = () => {
@@ -738,7 +741,7 @@ export function RouletteVirtualBoard({
                         {isActive && effectiveMultiplier > 1 ? (
                           <span
                             className={cn(
-                              'absolute -right-1 -top-1 z-9999 rounded-xs bg-blue-200 size-3.5 text-center text-[7px] font-medium uppercase -tracking-widest text-slate-950',
+                              'absolute -right-1 -top-1 z-9999 rounded-xs bg-blue-200 size-3.5 text-center text-[7px] font-bold uppercase -tracking-widest text-slate-950',
                               {
                                 'bg-indigo-400 text-white': effectiveMultiplier === 4,
                                 'bg-fuchsia-300': effectiveMultiplier === 8
@@ -783,6 +786,7 @@ export function RouletteVirtualBoard({
               onRebet={evolutionRebetVisible ? onRebet : undefined}
               onDouble={onDouble}
               onTables={onTables}
+              tableState={evolutionTableState}
             />
           </div>
           <div className='mt-2 grid grid-cols-4 px-1 gap-1'>

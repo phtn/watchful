@@ -2,15 +2,19 @@ import { FC, type ReactNode, useMemo } from 'react'
 import { BLACK_NUMBERS, ORPHELINS_G, RED_NUMBERS, TIER_G, VOISINS_G } from '../../../lib/roulette'
 import { cn } from '../../../lib/utils'
 import { ClassName } from '../../../types'
+import { tmap } from './tables'
 
 export const cardClassName: ClassName = `border-zinc-800 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0)),linear-gradient(180deg,rgba(31,35,41,0.96),rgba(12,14,19,0.9))]`
 
+type LobbyTableHistory = { tableId: string; numbers: number[] }
+
 type AnalyticsProps = {
   winningNumbers?: readonly number[]
+  lobbyHistories?: LobbyTableHistory[]
   onReset?: () => void
 }
 
-export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) => {
+export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], lobbyHistories = [], onReset }) => {
   const stats = useMemo(() => {
     const total = winningNumbers.length
     if (total === 0) {
@@ -126,10 +130,34 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
   return (
     <div className='space-y-2 text-white p-1'>
       <div className='mx-auto space-y-2'>
+        {/* Lobby History — one row per table */}
+        {lobbyHistories.length > 0 && (
+          <div className={cn('rounded-lg p-3 space-y-1', cardClassName)}>
+            {lobbyHistories.map(({ tableId, numbers }) => (
+              <div key={tableId} className='flex items-center gap-3'>
+                <span className='text-xs uppercase text-neutral-200 min-w-48 shrink-0 truncate' title={tableId}>
+                  {
+                    tmap[
+                      `${tableId
+                        .replace(/0+$/, '')
+                        .replace(/^[A-Z][a-z]+/, '')
+                        .toLowerCase()}` as keyof typeof tmap
+                    ]
+                  }
+                </span>
+                <div className='flex gap-0.5 bg-white/40 p-1 rounded-xs'>
+                  {numbers.slice(0, 10).map((n, i) => (
+                    <LobbyNumber key={i} number={n} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Hot & Cold Numbers */}
         <div className={cn('grid grid-cols-2 gap-1', cardClassName)}>
           <div className={cn('rounded-lg p-2')}>
-            <div className='flex flex-wrap gap-1'>
+            <div className='flex flex-wrap gap-1.5'>
               <div className='-rotate-90 p-0.5 rounded-sm text-orange-300 text-xs h-4'>
                 <span className='font-bold uppercase'>hot</span>
               </div>
@@ -144,7 +172,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           </div>
 
           <div className={cn('rounded-lg p-2')}>
-            <div className='flex flex-wrap gap-1'>
+            <div className='flex flex-wrap gap-1.5'>
               <div className='-rotate-90 p-0.5 rounded-sm text-cyan-400 text-xs h-4'>
                 <span className='font-bold uppercase'>cold</span>
               </div>
@@ -167,21 +195,21 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
             count={stats.zero.count}
           />
           <VPctBar
-            label='1st (1-12)'
+            label='1 - 12'
             percentage={stats.dozens[0].pct}
             color='bg-linear-to-b from-cyan-300/50 to-cyan-500'
             count={stats.dozens[0].count}
             cols='col-span-3'
           />
           <VPctBar
-            label='2nd (13-24)'
+            label='13 - 24'
             percentage={stats.dozens[1].pct}
             color='bg-linear-to-b from-sky-300/50 to-sky-500'
             count={stats.dozens[1].count}
             cols='col-span-3'
           />
           <VPctBar
-            label='3rd (25-36)'
+            label='25 - 36'
             percentage={stats.dozens[2].pct}
             color='bg-linear-to-b from-blue-300/50 to-blue-500'
             count={stats.dozens[2].count}
@@ -190,7 +218,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
         </div>
 
         {/* Stats Overview */}
-        <div className='grid grid-cols-4 gap-1'>
+        <div className='grid grid-cols-4 gap-1 bg-neutral-700/50'>
           <StatCard
             title='EVEN'
             value={`${stats.oddEven.even.pct.toFixed(1)}%`}
@@ -217,27 +245,27 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], onReset }) 
           />
         </div>
 
-        <div className={cn('rounded-lg p-4', cardClassName)}>
+        <div className={cn('rounded-lg p-4 bg-neutral-700')}>
           <div className='flex items-center gap-2 mb-6'>
             {/*<Grid3X3 size={20} className='text-indigo-400' />*/}
             {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
             <h2 className='font-clash font-semibold text-white uppercase'>Streets</h2>
           </div>
-          <div className='grid md:grid-cols-2 lg:grid-cols-3 gap-4'>
+          <div className='grid grid-cols-12 gap-0.5'>
             {stats.streets.map((street, idx) => {
               const start = idx * 3 + 1
               return (
                 <div key={idx} className='bg-neutral-800/30 rounded-xl p-3'>
-                  <div className='flex justify-between items-center mb-2'>
-                    <span className='text-sm font-medium text-neutral-300'>
-                      {start}-{start + 2}
-                    </span>
-                    <span className='text-sm font-semibold text-neutral-200'>{street.pct.toFixed(1)}%</span>
+                  <div className='font-medium text-neutral-300 text-sm'>
+                    <p className='text-center'>{start + 2}</p>
+                    <p className='text-center'>{start + 1}</p>
+                    <p className='text-center'>{start}</p>
+                    <p className='text-cyan-200 text-xs text-center'>{street.pct.toFixed(1)}%</p>
                   </div>
-                  <div className='h-1.5 bg-neutral-700/50 rounded-full overflow-hidden'>
+                  <div className='w-1.5 h-auto bg-neutral-700/50 rounded-full overflow-hidden'>
                     <div
-                      className='h-full bg-linear-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500'
-                      style={{ width: `${Math.min(street.pct * 3, 100)}%` }}
+                      className='bg-linear-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500'
+                      style={{ height: `${Math.min(street.pct * 3, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -337,7 +365,7 @@ const STAT_VALUE_CLASS_NAME: Record<NonNullable<StatCardProps['color']>, string>
 }
 
 const StatCard: FC<StatCardProps> = ({ title, value, trend, color = 'emerald' }) => (
-  <div className={cn('rounded-md p-2 transition-all duration-300', cardClassName)}>
+  <div className={cn('rounded-sm p-2 bg-neutral-900/20')}>
     <div className='flex items-center justify-between'>
       <span className='text-xs font-ios text-neutral-400 uppercase tracking-wider'>{title}</span>
       {/*{icon && <span className={`text-${color}-400`}>{icon}</span>}*/}
@@ -419,15 +447,25 @@ const NumberBadge: FC<NumberBadgeProps> = ({ number, count, isHot = true, showCo
   return (
     <div className='relative group'>
       <div
-        className={`w-7 h-7 ${getColor(number)} rounded-sm flex items-center justify-center font-semibold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
-        <span className='font-bold text-base'>{number}</span>
+        className={`w-7 h-6 ${getColor(number)} rounded-sm flex items-center justify-center font-semibold text-white hover:scale-110 hover:shadow-lg ${isHot ? 'hover:shadow-rose-500/20' : 'hover:shadow-cyan-500/20'}`}>
+        <span className='font-semibold text-base'>{number}</span>
       </div>
       {showCount && (
         <div
-          className={`absolute -top-1 -right-0.5 w-3.5 h-3.5 rounded-xs flex items-center justify-center text-[8px] font-bold text-neutral-800 shadow-xs ${isHot ? 'bg-white' : 'bg-white'}`}>
+          className={`absolute -top-1.5 -right-0.5 w-3.5 h-3 rounded-xs flex items-center justify-center text-[8px] font-medium text-white ${isHot ? 'bg-orange-200/20' : 'bg-cyan-100/20'} backdrop-blur-3xl`}>
           {count}
         </div>
       )}
     </div>
+  )
+}
+
+const LobbyNumber: FC<{ number: number }> = ({ number }) => {
+  const color = number === 0 ? 'bg-emerald-700' : RED_NUMBERS.includes(number) ? 'bg-[#B51B13]' : 'bg-neutral-700'
+  return (
+    <span
+      className={`${color} w-6 h-4.5 rounded-xs flex items-center justify-center text-[10px] font-medium text-white`}>
+      {number}
+    </span>
   )
 }

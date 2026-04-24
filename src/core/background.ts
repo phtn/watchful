@@ -379,4 +379,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })()
     return true
   }
+
+  if (message.type === 'PLACE_BET88_BET') {
+    void (async () => {
+      try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+        const activeTab = tabs[0]
+        if (!activeTab?.id) {
+          sendResponse({ ok: false, error: 'No active tab' })
+          return
+        }
+        const result = await chrome.tabs.sendMessage(activeTab.id, { type: 'PLACE_BET88_BET' })
+        sendResponse(result)
+      } catch (error) {
+        sendResponse({ ok: false, error: String(error) })
+      }
+    })()
+    return true
+  }
 })

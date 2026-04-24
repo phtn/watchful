@@ -3,8 +3,8 @@ import type { VirtualBankrollSnapshot } from '@/src/lib/virtual-bankroll'
 import { GameResult, PanelStatus, StoredData } from '@/src/types'
 import { Dispatch, SetStateAction } from 'react'
 import { ProviderMetric } from '../shared/provider-metric'
-import { Pulse } from '../shared/pulse'
 import { GameEntry } from './game-entry'
+import { Pulse } from './pulse'
 import { VirtualBankrollCard, type VirtualBankrollCardProps } from './virtual-bankroll-card'
 
 interface PulseProps {
@@ -50,6 +50,14 @@ export function OriginalsWorkspace({
         <Pulse {...pulseProps} />
       </div>
       <VirtualBankrollCard {...vrBankProps} />
+      <section className='flex items-center justify-between w-full'>
+        <div />
+        <button
+          onClick={vrBankProps.onPlaceBet}
+          className='rounded-full px-3 py-1.5 text-xs font-display font-extrabold text-white bg-[#730495] hover:bg-mage min-w-[30%] cursor-pointer'>
+          Place bet
+        </button>
+      </section>
       <section className='rounded-none border border-[#232830] bg-[#15191e] p-4'>
         <div className='flex items-center justify-between gap-3'>
           <div>

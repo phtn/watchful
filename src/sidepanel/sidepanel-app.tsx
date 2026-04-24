@@ -10,7 +10,14 @@ import {
   type SupportedSiteKey,
   type VirtualBankrollState
 } from '../types'
-import { EMPTY_ROULETTE_STORED_DATA, normalizeRouletteStoredData, type RouletteStoredData } from '../types/roulette'
+import {
+  EMPTY_ROULETTE_STORED_DATA,
+  normalizeRouletteStoredData,
+  summarizeRouletteResults,
+  TableState,
+  type EvolutionRouletteSpinResult,
+  type RouletteStoredData
+} from '../types/roulette'
 import { EMPTY_TENNIS_STORED_DATA, normalizeTennisStoredData, type TennisStoredData } from '../types/tennis'
 import { OriginalsWorkspace } from './components/originals/originals-workspace'
 import { RouletteWorkspace } from './components/roulette/roulette-workspace'
@@ -46,6 +53,8 @@ const App = () => {
   const [evolutionRebetVisible, setEvolutionRebetVisible] = useState<boolean>(false)
   const [evolutionBettingOpen, setEvolutionBettingOpen] = useState<boolean>(false)
   const [evolutionRecentNumbers, setEvolutionRecentNumbers] = useState<number[]>([])
+  const [evolutionTableState, setEvolutionTableState] = useState<TableState | null>(null)
+  const [evolutionLobbyHistories, setEvolutionLobbyHistories] = useState<{ tableId: string; numbers: number[] }[]>([])
   const [activeGameClass, setActiveGameClass] = useState<GameClassView>('originals')
   const [showSettings, setShowSettings] = useState(false)
   // ─── loaders ──────────────────────────────────────────────────────────────
@@ -85,7 +94,14 @@ const App = () => {
 
   const loadEvolutionChips = () => {
     chrome.storage.local.get(
-      ['evolutionChips', 'evolutionRebetVisible', 'evolutionBettingOpen', 'evolutionRecentNumbers'],
+      [
+        'evolutionChips',
+        'evolutionRebetVisible',
+        'evolutionBettingOpen',
+        'evolutionRecentNumbers',
+        'evolutionTableState',
+        'evolutionLobbyHistories'
+      ],
       (data) => {
         const chips = Array.isArray(data.evolutionChips)
           ? data.evolutionChips.filter((v: unknown) => typeof v === 'number' && v > 0)
@@ -93,6 +109,13 @@ const App = () => {
         const recentNumbers = Array.isArray(data.evolutionRecentNumbers)
           ? data.evolutionRecentNumbers.filter(
               (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 36
+            )
+          : []
+        const lobbyHistories = Array.isArray(data.evolutionLobbyHistories)
+          ? (data.evolutionLobbyHistories as unknown[]).filter(
+              (v): v is { tableId: string; numbers: number[] } =>
+                typeof v === 'object' && v !== null && typeof (v as Record<string, unknown>).tableId === 'string' &&
+                Array.isArray((v as Record<string, unknown>).numbers)
             )
           : []
         startTransition(() => {
@@ -103,6 +126,8 @@ const App = () => {
           setEvolutionRebetVisible(data.evolutionRebetVisible === true)
           setEvolutionBettingOpen(data.evolutionBettingOpen === true)
           setEvolutionRecentNumbers(recentNumbers as number[])
+          setEvolutionTableState(typeof data.evolutionTableState === 'string' ? data.evolutionTableState as TableState : null)
+          setEvolutionLobbyHistories(lobbyHistories)
         })
       }
     )
@@ -139,11 +164,27 @@ const App = () => {
   }, [])
 
   const clearRouletteResults = useCallback(() => {
-    if (!window.confirm('Clear captured roulette spins?')) return
-    chrome.storage.local.remove(['rouletteResults'], () => {
-      startTransition(() => setRouletteStats(EMPTY_ROULETTE_STORED_DATA))
-    })
-  }, [])
+    const now = Date.now()
+    const seeded: EvolutionRouletteSpinResult[] = [...evolutionRecentNumbers].reverse().map((n, i) => ({
+      id: `table-seed-${now}-${i}`,
+      provider: 'stake' as const,
+      source: 'evolution' as const,
+      game: 'roulette' as const,
+      description: '',
+      winningNumber: n,
+      timestamp: now - (evolutionRecentNumbers.length - 1 - i) * 1000,
+      updatedAt: new Date(now - (evolutionRecentNumbers.length - 1 - i) * 1000).toISOString(),
+      url: '',
+      eventType: 'winSpots' as const,
+      gameId: '',
+      code: '',
+      winSpots: {},
+      resultNumbers: [n]
+    }))
+    const next = seeded.length > 0 ? summarizeRouletteResults(seeded) : EMPTY_ROULETTE_STORED_DATA
+    setRouletteStats(next)
+    chrome.storage.local.set({ rouletteResults: next })
+  }, [evolutionRecentNumbers])
 
   const clearTennisResults = useCallback(() => {
     if (!window.confirm('Clear captured tennis board data?')) return
@@ -203,6 +244,14 @@ const App = () => {
     setActiveGameClass((cur) => order[(order.indexOf(cur) + 1) % order.length])
   }, [])
 
+  const placeBet88Bet = useCallback(() => {
+    chrome.runtime.sendMessage({ type: 'PLACE_BET88_BET' }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn('[watchful-wind] placeBet88Bet failed:', chrome.runtime.lastError.message)
+      }
+    })
+  }, [])
+
   const toggleSimulated = useCallback(() => setSimulated((prev) => !prev), [])
   const toggleShowSettings = useCallback(() => setShowSettings((prev) => !prev), [])
 
@@ -227,7 +276,9 @@ const App = () => {
         changes.evolutionChips ||
         changes.evolutionRebetVisible ||
         changes.evolutionBettingOpen ||
-        changes.evolutionRecentNumbers
+        changes.evolutionRecentNumbers ||
+        changes.evolutionTableState ||
+        changes.evolutionLobbyHistories
       ) {
         loadEvolutionChips()
       }
@@ -301,7 +352,17 @@ const App = () => {
   // ─── prop bundles ──────────────────────────────────────────────────────────
 
   const pulseProps = useMemo(
-    () => ({ requestUrlStatus, clearData, totalStaked, netProfit, snapshot: bankrollSnapshot, latestGame, getNetTone, simulated, toggleSimulated }),
+    () => ({
+      requestUrlStatus,
+      clearData,
+      totalStaked,
+      netProfit,
+      snapshot: bankrollSnapshot,
+      latestGame,
+      getNetTone,
+      simulated,
+      toggleSimulated
+    }),
     [requestUrlStatus, clearData, totalStaked, netProfit, bankrollSnapshot, latestGame, simulated, toggleSimulated]
   )
 
@@ -313,7 +374,8 @@ const App = () => {
       onDisable: disableVirtualBankroll,
       onReplenish: replenishVirtualBankroll,
       onReset: resetVirtualBankroll,
-      onUpdateBaseBetAmount: updateVirtualBankrollBetAmount
+      onUpdateBaseBetAmount: updateVirtualBankrollBetAmount,
+      onPlaceBet: placeBet88Bet
     }),
     [
       virtualBankroll,
@@ -322,7 +384,8 @@ const App = () => {
       disableVirtualBankroll,
       replenishVirtualBankroll,
       resetVirtualBankroll,
-      updateVirtualBankrollBetAmount
+      updateVirtualBankrollBetAmount,
+      placeBet88Bet
     ]
   )
 
@@ -363,6 +426,8 @@ const App = () => {
             evolutionRebetVisible={evolutionRebetVisible}
             evolutionBettingOpen={evolutionBettingOpen}
             evolutionRecentNumbers={evolutionRecentNumbers}
+            evolutionTableState={evolutionTableState}
+            evolutionLobbyHistories={evolutionLobbyHistories}
             onReset={clearRouletteResults}
           />
         ) : (

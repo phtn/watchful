@@ -2,6 +2,7 @@
 
 import { Icon } from '@/src/lib/icons'
 import { cn } from '@/src/lib/utils'
+import { TableState } from '@/src/types/roulette'
 import { useMemo } from 'react'
 
 interface Chip extends ChipProps {
@@ -24,9 +25,18 @@ interface ChipStackProps {
   onRebet?: VoidFunction
   onDouble?: VoidFunction
   onTables?: VoidFunction
+  tableState?: TableState | null
 }
 
-export const ChipStack = ({ chipsDetected, onChipSelect, onUndo, onRebet, onDouble, onTables }: ChipStackProps) => {
+export const ChipStack = ({
+  chipsDetected,
+  onChipSelect,
+  onUndo,
+  onRebet,
+  onDouble,
+  onTables,
+  tableState
+}: ChipStackProps) => {
   const chips = useMemo(
     () =>
       [
@@ -64,23 +74,44 @@ export const ChipStack = ({ chipsDetected, onChipSelect, onUndo, onRebet, onDoub
           stroke: 'stroke-c2',
           selected: false,
           size: 30,
-          offset: { x: '26%', y: '57%' }
+          offset: { x: '25%', y: '57%' }
         },
         { id: '3', value: 100, fill: 'fill-c3', stroke: 'stroke-c3', size: 28, offset: { x: '19.5%', y: '55%' } },
         { id: '4', value: 250, fill: 'fill-c4', stroke: 'stroke-c4', size: 26, offset: { x: '19%', y: '54%' } },
         { id: '5', value: 500, fill: 'fill-c5', stroke: 'stroke-c5', size: 25, offset: { x: '20%', y: '54%' } },
         { id: '6', value: 1000, fill: 'fill-c6', stroke: 'stroke-c6', size: 21, offset: { x: '20%', y: '52%' } },
-        { id: '7', value: 1250, fill: 'fill-c5', stroke: 'stroke-c5', size: 25, offset: { x: '20%', y: '54%' } },
-        { id: '8', value: 5000, fill: 'fill-c6', stroke: 'stroke-c6', size: 21, offset: { x: '20%', y: '52%' } }
+        { id: '7', value: 1250, fill: 'fill-c5', stroke: 'stroke-c5', size: 22, offset: { x: '16%', y: '54%' } },
+        { id: '8', value: 5000, fill: 'fill-c6', stroke: 'stroke-c6', size: 20, offset: { x: '16%', y: '52%' } }
       ].filter((chip) => chipsDetected.includes(chip.value)) as Array<Chip>,
     [chipsDetected]
   )
+
+  const smap: Record<TableState, string> = {
+    BETS_OPEN: 'OPEN',
+    BETS_CLOSING_SOON: 'CLOSING',
+    GAME_RESOLVED: 'RESOLVED',
+    BETS_CLOSED_ANNOUNCED: 'CLOSED',
+    BETS_CLOSED: 'CLOSED'
+  }
   return (
     <div className='' data-role='footer-perspective-chip-stack' data-is-collapsed='true'>
       <div className='' data-role='chip-stack-wrapper'>
         <div
           className='bg-orange-100/0 py-4 flex items-center justify-center space-x-4'
           data-role='expanded-chip-stack-wrapper'>
+          <p
+            id='table-state'
+            className={cn(
+              'font-display font-semibold text-xs text-center uppercase w-16 py-0.5 rounded-full',
+              {
+                'text-emerald-400': tableState && smap[tableState] === 'OPEN',
+                'text-orange-300 animate-pulse': tableState && smap[tableState] === 'CLOSING',
+                'text-red-400': tableState && smap[tableState] === 'CLOSED'
+              },
+              !tableState && 'opacity-0'
+            )}>
+            {tableState ? smap[tableState] : '—'}
+          </p>
           <button className='flex space-x-2' onClick={onUndo} title='Undo last bet'>
             <Icon name='undo' className='size-6' />
           </button>
@@ -104,12 +135,12 @@ export const ChipStack = ({ chipsDetected, onChipSelect, onUndo, onRebet, onDoub
             <span className='text-lg'>2x</span>
           </button>
 
-          <button
+          {/*<button
             className='flex items-center text-[0.6rem] font-semibold uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity'
             onClick={onTables}
             title='Browse tables'>
             <span>Tables</span>
-          </button>
+          </button>*/}
         </div>
       </div>
     </div>
@@ -147,7 +178,7 @@ const Chip = ({ value, fill, stroke, selected, size, offset, onClick }: ChipProp
               d='M38.941 0a39 39 0 1 0 39 39 39.046 39.046 0 0 0-39-39zm-2.088 76.439l.483-8.471a28.99 28.99 0 0 1-4.668-.639l-1.783 8.291a37.277 37.277 0 0 1-12.144-5.051l4.6-7.124a29.143 29.143 0 0 1-8.85-8.851l-7.124 4.6a37.28 37.28 0 0 1-5.045-12.13l8.3-1.784a28.99 28.99 0 0 1-.639-4.668l-8.483.482C1.463 40.4 1.44 39.7 1.44 39s.023-1.391.061-2.08l8.478.483a28.99 28.99 0 0 1 .639-4.668l-8.3-1.785a37.275 37.275 0 0 1 5.047-12.142l7.126 4.6a29.143 29.143 0 0 1 8.85-8.851l-4.6-7.125a37.28 37.28 0 0 1 12.142-5.05l1.786 8.3a28.99 28.99 0 0 1 4.668-.639l-.483-8.484c.692-.038 1.388-.061 2.089-.061s1.4.023 2.087.061l-.483 8.484a28.99 28.99 0 0 1 4.668.639L47 2.381a37.276 37.276 0 0 1 12.14 5.05l-4.6 7.126a29.14 29.14 0 0 1 8.849 8.85l7.127-4.6a37.276 37.276 0 0 1 5.044 12.142l-8.3 1.785a28.99 28.99 0 0 1 .64 4.666l8.478-.483c.038.689.061 1.382.061 2.08s-.023 1.4-.062 2.1l-8.477-.486a28.99 28.99 0 0 1-.639 4.668l8.3 1.784a37.282 37.282 0 0 1-5.046 12.132l-7.125-4.6a29.14 29.14 0 0 1-8.849 8.85l4.6 7.125A37.275 37.275 0 0 1 47 75.619l-1.783-8.291a28.99 28.99 0 0 1-4.668.639l.483 8.471c-.691.038-1.386.061-2.087.061s-1.401-.022-2.092-.06z'></path>
           </g>
           <text
-            className='fill-white stroke-white font-clash font-semibold tracking-tight opacity-100 drop-shadow-2xs'
+            className='fill-white stroke-white font-clash font-semibold tracking-tight opacity-100 drop-shadow-xs drop-shadow-gray-700'
             x={offset?.x ?? '25%'}
             y={offset?.y ?? '58%'}
             fontSize={size ?? 34}

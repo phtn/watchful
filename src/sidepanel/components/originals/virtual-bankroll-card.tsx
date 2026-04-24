@@ -12,6 +12,7 @@ export interface VirtualBankrollCardProps {
   onUpdateBaseBetAmount: (amount: number) => void
   onReplenish: (amount: number) => void
   onReset: () => void
+  onPlaceBet: () => void
 }
 
 function formatEditableNumber(value: number): string {
@@ -25,7 +26,8 @@ export function VirtualBankrollCard({
   onDisable,
   onUpdateBaseBetAmount,
   onReplenish,
-  onReset
+  onReset,
+  onPlaceBet
 }: VirtualBankrollCardProps) {
   const [seedInput, setSeedInput] = useState(() => formatEditableNumber(bankroll.seedBalance))
   const [betInput, setBetInput] = useState(() => formatEditableNumber(bankroll.baseBetAmount))
@@ -73,8 +75,16 @@ export function VirtualBankrollCard({
     onUpdateBaseBetAmount(parsed)
   }
 
-  const handleDoubleUp = (bet: number) => () => setBetInput(formatEditableNumber(bet * 2))
-  const handleDoubleDown = (bet: number) => () => setBetInput(formatEditableNumber(bet / 2))
+  const handleDoubleUp = (bet: number) => () => {
+    const newBet = bet * 2
+    setBetInput(formatEditableNumber(newBet))
+    onUpdateBaseBetAmount(newBet)
+  }
+  const handleDoubleDown = (bet: number) => () => {
+    const newBet = bet / 2
+    setBetInput(formatEditableNumber(newBet))
+    onUpdateBaseBetAmount(newBet)
+  }
 
   return (
     <section className={cn('rounded-md text-white', cardClassName)}>
@@ -126,13 +136,13 @@ export function VirtualBankrollCard({
                 </button>
                 <button
                   onClick={handleDoubleUp(+betInput)}
-                  className='absolute bottom-0.5 right-12 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
+                  className='absolute bottom-0.5 right-8 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
                   2x
                 </button>
                 <button
-                  onClick={handleUpdateBaseBet}
-                  className='absolute bottom-0.5 right-0.5 rounded-px px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/15'>
-                  Save
+                  onClick={onPlaceBet}
+                  className='absolute bottom-0.5 right-0.5 rounded-px px-3 py-1.5 text-xs font-semibold text-avocado transition hover:bg-white/15'>
+                  Bet
                 </button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { KimQuadrantId, KIMS_ALGO_QUADRANTS, SAMPLE_SPIN_TAPE } from '../../../lib/roulette'
 import type { PanelStatus } from '../../../types'
-import type { RouletteStoredData } from '../../../types/roulette'
+import type { RouletteStoredData, TableState } from '../../../types/roulette'
 import { Analytics } from './roulette-analytics'
 import { RouletteHeader } from './roulette-header'
 import { RouletteVirtualBoard } from './roulette-virtual-board'
@@ -13,6 +13,8 @@ interface RouletteWorkspaceProps {
   evolutionRebetVisible: boolean
   evolutionBettingOpen: boolean
   evolutionRecentNumbers: number[]
+  evolutionTableState: TableState | null
+  evolutionLobbyHistories: { tableId: string; numbers: number[] }[]
   onReset: () => void
 }
 
@@ -23,6 +25,8 @@ export function RouletteWorkspace({
   evolutionRebetVisible,
   evolutionBettingOpen,
   evolutionRecentNumbers,
+  evolutionTableState,
+  evolutionLobbyHistories,
   onReset
 }: RouletteWorkspaceProps) {
   const [startingQuadrant, setStartingQuadrant] = useState<KimQuadrantId>('q1')
@@ -64,8 +68,9 @@ export function RouletteWorkspace({
         evolutionChips={evolutionChips}
         evolutionRebetVisible={evolutionRebetVisible}
         evolutionBettingOpen={evolutionBettingOpen}
+        evolutionTableState={evolutionTableState}
       />
-      <Analytics winningNumbers={winningNumbers} onReset={onReset} />
+      <Analytics winningNumbers={winningNumbers} lobbyHistories={evolutionLobbyHistories} onReset={onReset} />
     </div>
   )
 }
