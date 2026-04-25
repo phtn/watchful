@@ -218,7 +218,7 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], lobbyHistor
         </div>
 
         {/* Stats Overview */}
-        <div className='grid grid-cols-4 gap-1 bg-neutral-700/50'>
+        <div className='grid grid-cols-4 gap-1 bg-neutral-700'>
           <StatCard
             title='EVEN'
             value={`${stats.oddEven.even.pct.toFixed(1)}%`}
@@ -245,28 +245,26 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], lobbyHistor
           />
         </div>
 
-        <div className={cn('rounded-lg p-4 bg-neutral-700')}>
-          <div className='flex items-center gap-2 mb-6'>
-            {/*<Grid3X3 size={20} className='text-indigo-400' />*/}
-            {/*<Icon name='re-up.ph' className='text-white size-4' />*/}
-            <h2 className='font-clash font-semibold text-white uppercase'>Streets</h2>
-          </div>
-          <div className='grid grid-cols-12 gap-0.5'>
+        <div className={cn('rounded-lg px-4 pb-3 bg-neutral-700')}>
+          <h2 className='font-okx font-semibold text-white uppercase py-2'>Streets</h2>
+          <div className='grid grid-cols-12 gap-1.5'>
             {stats.streets.map((street, idx) => {
               const start = idx * 3 + 1
               return (
-                <div key={idx} className='bg-neutral-800/30 rounded-xl p-3'>
-                  <div className='font-medium text-neutral-300 text-sm'>
-                    <p className='text-center'>{start + 2}</p>
-                    <p className='text-center'>{start + 1}</p>
-                    <p className='text-center'>{start}</p>
-                    <p className='text-cyan-200 text-xs text-center'>{street.pct.toFixed(1)}%</p>
-                  </div>
-                  <div className='w-1.5 h-auto bg-neutral-700/50 rounded-full overflow-hidden'>
-                    <div
-                      className='bg-linear-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500'
-                      style={{ height: `${Math.min(street.pct * 3, 100)}%` }}
-                    />
+                <div key={idx} className=' bg-neutral-800/50 pt-2 pb-1 rounded-full flex items-center justify-center '>
+                  <div className='relative z-10 h-20 font-medium text-neutral-300 text-sm text-center'>
+                    <div className='absolute z-0 bottom-0 rounded-full left-0 w-7 h-18'>
+                      <div
+                        className='absolute bottom-0 w-7 bg-linear-to-t from-emerald-400/50 via-emerald-400/40 to-emerald-30 rounded-full transition-all duration-500'
+                        style={{ height: `${Math.min(street.pct * 3 * 2, 100)}%` }}
+                      />
+                    </div>
+                    <p className='font-okx text-center relative z-10'>{start + 2}</p>
+                    <p className='font-okx text-center relative z-10'>{start + 1}</p>
+                    <p className='font-okx text-center relative z-10'>{start}</p>
+                    <p className='font-okx font-semibold text-emerald-100 text-xs text-center relative z-10 w-7'>
+                      {street.pct.toFixed(1)}
+                    </p>
                   </div>
                 </div>
               )
@@ -322,8 +320,8 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], lobbyHistor
         <div className={cn('rounded-lg border border-white/8 p-4', cardClassName)}>
           <div className='flex items-start justify-between gap-4'>
             <div className='space-y-1'>
-              <p className='text-[11px] font-ios uppercase tracking-[0.28em] text-neutral-500'>Roulette Analytics</p>
-              <h1 className='font-clash text-lg font-semibold uppercase text-white'>Spinner Results</h1>
+              <p className='text-[8px] font-display uppercase tracking-wide text-neutral-500'>roulette</p>
+              <h1 className='font-okx text-lg font-semibold uppercase text-white'>Analytics</h1>
             </div>
             <button
               type='button'
@@ -335,8 +333,8 @@ export const Analytics: FC<AnalyticsProps> = ({ winningNumbers = [], lobbyHistor
           </div>
           {winningNumbers.length > 0 && (
             <div className='mt-4 flex items-center justify-between gap-3 border-t border-white/8 pt-3 text-xs text-neutral-400'>
-              <span>{winningNumbers.length} tracked spins</span>
-              <span>Latest result: {winningNumbers[0]}</span>
+              <span className='font-okx'>{winningNumbers.length} tracked spins</span>
+              <span className='font-okx'>Latest result: {winningNumbers[0]}</span>
             </div>
           )}
         </div>
@@ -413,9 +411,9 @@ const PercentageBar: FC<PercentageBarProps> = ({ label, percentage, color, count
 )
 const VPctBar: FC<PercentageBarProps & { cols?: string }> = ({ label, percentage, color, count, cols }) => (
   <div className={cn('group', cols)}>
-    <div className={cn('relative h-16 bg-neutral-700/50 rounded-sm overflow-hidden flex items-end')}>
+    <div className={cn('relative h-16 bg-neutral-700/50 rounded-t-sm overflow-hidden flex items-end')}>
       <div
-        className={`w-full ${color} rounded-sm transition-all duration-700 ease-out group-hover:shadow-lg`}
+        className={`w-full ${color} rounded-md rounded-b-none transition-all duration-700 ease-out group-hover:shadow-lg`}
         style={{ height: `${Math.min(percentage, 100) + 0.33}%` }}
       />
 

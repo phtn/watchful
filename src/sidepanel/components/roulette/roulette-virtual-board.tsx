@@ -1,5 +1,5 @@
 import { TableState } from '@/src/types/roulette'
-import { PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BOARD_ROWS,
   KIMS_ALGO_QUADRANTS,
@@ -93,6 +93,23 @@ function getHotNumbers(values: readonly number[], limit: number = 6): number[] {
     .map(([number]) => number)
 }
 
+const WIN_VERBS = [
+  'snatched',
+  'bagged',
+  'took',
+  'grabbed',
+  'swiped',
+  'cashed',
+  'scooped',
+  'catched',
+  'stashed',
+  'locked'
+]
+
+function pickVerb(): string {
+  return WIN_VERBS[Math.floor(Math.random() * WIN_VERBS.length)]
+}
+
 function StepTone({ value }: { value: string }) {
   return (
     <span className='rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[0.62rem] uppercase tracking-[0.16em]'>
@@ -121,6 +138,7 @@ export function RouletteVirtualBoard({
   const [winStreak, setWinStreak] = useState(0)
   const [accWinnings, setAccWinnings] = useState(0)
   const [lastWinProfit, setLastWinProfit] = useState<number | null>(null)
+  const [winVerb, setWinVerb] = useState(pickVerb)
   const [lockedBankValue, setLockedBankValue] = useState<number | null>(null)
   const [inputMode, setInputMode] = useState<'base' | 'bank'>('base')
   const [selectedChip, setSelectedChip] = useState<number | null>(null)
@@ -275,16 +293,20 @@ export function RouletteVirtualBoard({
 
     setWinStreak((prev) => (streakReset ? 0 : prev + streakDelta))
     if (winningsGained !== 0) setAccWinnings((prev) => prev + winningsGained)
-    if (latestProfit !== null) setLastWinProfit(latestProfit)
+    if (latestProfit !== null) {
+      setLastWinProfit(latestProfit)
+      setWinVerb(pickVerb())
+    }
   }, [simulation.steps])
 
-  // Auto-disarm on win or zero without a hedge (rounds 1–3)
+  // Auto-disarm on win, max-loss, or zero without a hedge (rounds 1–3)
   useEffect(() => {
     if (!isTracking) return
     const latestStep = simulation.steps[simulation.steps.length - 1]
     if (!latestStep) return
     if (
       latestStep.sessionOutcome === 'reset_after_win' ||
+      latestStep.sessionOutcome === 'reset_after_max_loss' ||
       (latestStep.landedNumber === 0 && latestStep.bet.zeroStake === 0)
     ) {
       setIsTracking(false)
@@ -348,10 +370,10 @@ export function RouletteVirtualBoard({
     const multiplier = roundMultiplier
     const effectiveDelay = 700
 
-    console.log(
-      `[Load] Scheduling bets in ${effectiveDelay}ms — round ${round}, ${multiplier}x (${doubleCount} doubles), chip ${chip}, ${baseNumbers.length} slot clicks`,
-      baseNumbers
-    )
+    // console.log(
+    //   `[Load] Scheduling bets in ${effectiveDelay}ms — round ${round}, ${multiplier}x (${doubleCount} doubles), chip ${chip}, ${baseNumbers.length} slot clicks`,
+    //   baseNumbers
+    // )
 
     // Delay the actual placement so Evolution's bet-spot DOM has time to render
     // after the betting-window signal fires.
@@ -466,13 +488,13 @@ export function RouletteVirtualBoard({
         <div className=''>
           {lastWinProfit !== null && (
             <p className='font-semibold text-lg italic uppercase text-emerald-100'>
-              <span className='-tracking-widest'>Snatched</span>{' '}
+              <span className='-tracking-widest'>{winVerb}</span>{' '}
               <span className='font-extrabold text-amber-300'>+{fmtAmt(lastWinProfit)}</span>
             </p>
           )}
         </div>
         <div className='flex flex-col items-end gap-2'>
-          <div className='flex flex-wrap items-center justify-end gap-4'>
+          <div className='flex flex-wrap items-center justify-end gap-2'>
             <div
               className={cn(
                 'bg-zinc-900/70 border border-zinc-900/70 rounded-lg h-6 w-6 flex items-center justify-center',
@@ -497,7 +519,7 @@ export function RouletteVirtualBoard({
               title='Scatter: randomly sample slots from the active quadrant pool each round'
               onClick={() => setScatter((v) => !v)}
               className={cn(
-                'h-5 w-5 bg-zinc-900/60 border border-zinc-900/60 backdrop-blur-2xl rounded-md flex items-center justify-center',
+                'h-5 w-5 bg-zinc-900/60 border border-zinc-900/60 backdrop-blur-2xl rounded-md flex items-center justify-center ml-1',
                 {
                   'opacity-25': !scatter
                 }
@@ -509,17 +531,6 @@ export function RouletteVirtualBoard({
                   backgroundColor: 'transparent'
                 }}></span>
             </button>
-            {/*<button
-              type='button'
-              title='Scatter: randomly sample slots from the active quadrant pool each round'
-              className={cn(
-                'rounded-sm border px-2 py-1 text-xs font-semibold uppercase tracking-widest transition-colors',
-                scatter
-                  ? 'border-violet-300/60 bg-violet-300/20 text-violet-200'
-                  : 'border-white/15 bg-white/5 text-slate-500 hover:text-slate-300'
-              )}>
-              Scatter
-            </button>*/}
 
             <div className='flex items-center'>
               <button
@@ -527,7 +538,7 @@ export function RouletteVirtualBoard({
                 onClick={() => setAllowOverlaps((current) => !current)}
                 disabled={scatter}
                 className={cn(
-                  'flex items-center justify-center h-7 w-8 disabled:cursor-not-allowed disabled:opacity-40'
+                  'flex items-center justify-center h-7 w-7 disabled:cursor-not-allowed disabled:opacity-40'
                 )}>
                 <span
                   className={cn('font-medium text-base leading-0 uppercase text-orange-100/70', {
@@ -542,7 +553,7 @@ export function RouletteVirtualBoard({
                 onClick={() => setSpreadSelectionMode((current) => (current === 'within' ? 'across' : 'within'))}
                 disabled={allowOverlaps}
                 className={cn(
-                  'flex items-center justify-center h-7 w-8 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                  'flex items-center justify-center h-7 w-7 transition-colors disabled:cursor-not-allowed disabled:opacity-40',
                   spreadSelectionMode === 'within' ? ' text-cyan-300/80' : ' text-fuchsia-300/80'
                 )}>
                 <span className='font-medium text-base leading-0 uppercase'>
@@ -587,8 +598,8 @@ export function RouletteVirtualBoard({
               onClick={() => setLoaded((v) => !v)}
               title='Execute v-board bets on the Evolution table each betting window'
               className={cn(
-                'relative inline-flex items-center justify-center',
-                loaded ? 'bg-emerald-400/0' : 'opacity-40 grayscale'
+                'relative inline-flex items-center justify-center ml-2',
+                !loaded && 'opacity-40 grayscale'
               )}>
               <span
                 className={`h-5 min-w-5 bg-no-repeat object-contain`}
@@ -789,31 +800,37 @@ export function RouletteVirtualBoard({
               tableState={evolutionTableState}
             />
           </div>
-          <div className='mt-2 grid grid-cols-4 px-1 gap-1'>
-            <Stat>
+          <div className='mt-2 grid grid-cols-7 px-1 gap-1'>
+            <Stat cols={1}>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>round</p>
-              <p className='mt-1.5 text-lg font-normal text-white'>{nextBet.round}</p>
+              <p className='mt-1.5 font-okx font-normal text-white text-lg'>{nextBet.round}</p>
             </Stat>
             <Stat>
-              <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>W-streak</p>
-              <p className='mt-2 text-lg font-normal text-white'>{winStreak}</p>
+              <div className='flex items-start justify-between'>
+                <span className='text-slate-400 text-[0.62rem] tracking-[0.2em] uppercase'>WS</span>
+                <span className='font-okx font-medium text-amber-300'>{accWinnings.toFixed(0)}</span>
+              </div>
+              <p className='mt-1.5 font-okx font-normal text-white text-lg'>{winStreak}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
-                spins&middot;({winningNumbers.length})
+                spins &middot; <span className='text-emerald-400'>{winningNumbers.length}</span>
               </p>
-              <p className='mt-2 text-lg font-normal text-white'>{simulation.steps.length}</p>
+              <p className='mt-1.5 text-lg font-normal text-white'>{simulation.steps.length}</p>
             </Stat>
             <Stat>
-              <div className='flex items-center justify-between gap-1'>
-                <span className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
-                  {inputMode === 'base' ? 'slut' : `unit = ${baseUnit.toFixed(2)}`}
+              <div className='flex items-start justify-between'>
+                <span
+                  className={cn('text-[0.62rem] uppercase tracking-[0.2em] text-slate-400', {
+                    'font-medium text-indigo-300 opacity-100': inputMode === 'base'
+                  })}>
+                  {inputMode === 'base' ? `${baseUnit * 288}` : `unit = ${baseUnit.toFixed(2)}`}
                 </span>
                 <button
                   type='button'
                   onClick={() => setInputMode((m) => (m === 'base' ? 'bank' : 'base'))}
                   className={cn(
-                    'rounded px-1.5 py-px text-[8px] font-medium uppercase tracking-wide transition-colors',
+                    'rounded px-1 py-[0.5px] text-[8px] font-medium uppercase tracking-wide transition-colors',
                     inputMode === 'base' ? 'bg-slate-700 text-slate-300' : 'bg-indigo-500/30 text-indigo-200'
                   )}>
                   {inputMode === 'base' ? 'base' : 'bank'}
@@ -825,12 +842,12 @@ export function RouletteVirtualBoard({
                 step='1'
                 value={baseUnitInput}
                 onChange={(event) => setBaseUnitInput(event.target.value)}
-                className='mt-1 w-full rounded-sm bg-slate-950/70 px-3 py-1 text-sm text-white outline-none'
+                className='mt-1.5 w-full rounded-sm bg-slate-950/70 px-3 py-1 text-sm text-white outline-none'
               />
             </Stat>
           </div>
 
-          <div className='grid grid-cols-5 mt-1 px-1 pb-1 gap-1'>
+          <div className='grid grid-cols-10 mt-1 px-1 pb-1 gap-1'>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Next</p>
               <p className='mt-1.5 text-lg font-normal text-white'>{fmtAmt(nextBet.totalStake)}</p>
@@ -844,14 +861,14 @@ export function RouletteVirtualBoard({
               </p>
             </Stat>
             <Stat>
-              <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Staked</p>
+              <p className=' text-slate-400 text-[0.62rem] tracking-[0.2em] uppercase'>Staked</p>
               <p className='mt-1.5 text-lg font-normal text-white'>{fmtAmt(totalStaked)}</p>
             </Stat>
             <Stat>
-              <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>
-                Take &middot; <span className='tracking-normal text-emerald-400 font-semibold'>{winAmount}</span>
+              <p className=' text-slate-400 text-[0.62rem] tracking-[0.2em] uppercase'>
+                Take &middot; <span className=' text-emerald-400 tracking-[0.2em]'>{winAmount}</span>
               </p>
-              <p className='mt-1.5 text-lg font-normal text-yellow-300'>{fmtAmt(winAmount - totalStaked)}</p>
+              <p className='mt-1.5 font-okx font-normal text-yellow-300 text-lg'>{fmtAmt(winAmount - totalStaked)}</p>
             </Stat>
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>PCT</p>
@@ -929,8 +946,19 @@ export function RouletteVirtualBoard({
   )
 }
 
-const Stat = ({ children }: PropsWithChildren) => {
-  return <div className='rounded-sm border-[0.33px] border-white/15 bg-white/8 backdrop-blur-md p-1.25'>{children}</div>
+interface StatsProps {
+  cols?: number
+  children: ReactNode
+}
+const Stat = ({ children, cols = 2 }: StatsProps) => {
+  return (
+    <div
+      className={cn('rounded-sm border-[0.33px] border-white/15 bg-white/8 backdrop-blur-md p-1.25 col-span-2', {
+        'col-span-1': cols === 1
+      })}>
+      {children}
+    </div>
+  )
 }
 
 /*

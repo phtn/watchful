@@ -102,7 +102,7 @@ export const ChipStack = ({
           <p
             id='table-state'
             className={cn(
-              'font-display font-semibold text-xs text-center uppercase w-16 py-0.5 rounded-full',
+              'font-display font-semibold text-sm text-center uppercase w-18 py-0.5',
               {
                 'text-emerald-400': tableState && smap[tableState] === 'OPEN',
                 'text-orange-300 animate-pulse': tableState && smap[tableState] === 'CLOSING',
@@ -113,7 +113,7 @@ export const ChipStack = ({
             {tableState ? smap[tableState] : '—'}
           </p>
           <button className='flex space-x-2' onClick={onUndo} title='Undo last bet'>
-            <Icon name='undo' className='size-6' />
+            <Icon name='undo' className='size-4 opacity-50' />
           </button>
 
           <div data-role='chip-stack' className='flex space-x-2'>
@@ -132,7 +132,7 @@ export const ChipStack = ({
           )}
 
           <button className='flex items-center space-x-2' onClick={onDouble} title='Double bets'>
-            <span className='text-lg'>2x</span>
+            <span className='text-base opacity-50'>2x</span>
           </button>
 
           {/*<button
