@@ -218,8 +218,9 @@ export function RouletteVirtualBoard({
   )
   const totalStaked = useMemo(
     () =>
-      simulation.steps.slice(lastResetIndex + 1).reduce((sum, step) => sum + step.bet.totalStake, 0) +
-      nextBet.totalStake,
+      simulation.steps
+        .slice(lastResetIndex + 1)
+        .reduce((sum, step) => sum + step.bet.totalStake + (step.bet.zeroStake ?? 0), 0) + nextBet.totalStake,
     [lastResetIndex, nextBet, simulation]
   )
   // const recentSteps = simulation.steps.slice(-6).reverse()
@@ -851,14 +852,6 @@ export function RouletteVirtualBoard({
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>Next</p>
               <p className='mt-1.5 text-lg font-normal text-white'>{fmtAmt(nextBet.totalStake)}</p>
-
-              <p className='hidden mt-1 text-xs text-slate-400'>
-                Unit {nextBet.unitStake} · x{roundMultiplier}
-                {nextBet.zeroStake > 0 ? ` • Zero ${nextBet.zeroStake}` : ''}
-              </p>
-              <p className='hidden mt-1 text-xs text-slate-500'>
-                {allowOverlaps ? 'Overlap stack active' : `Spread ${nextBet.spreadSelectionMode} hot-pick mode`}
-              </p>
             </Stat>
             <Stat>
               <p className=' text-slate-400 text-[0.62rem] tracking-[0.2em] uppercase'>Staked</p>
