@@ -164,7 +164,7 @@ export function RouletteVirtualBoard({
 
   const parsedInput = Number.parseFloat(baseUnitInput)
   const baseUnit =
-    Number.isFinite(parsedInput) && parsedInput > 0 ? (inputMode === 'bank' ? parsedInput / 288 : parsedInput) : 1
+    Number.isFinite(parsedInput) && parsedInput > 0 ? (inputMode === 'bank' ? parsedInput / 272 : parsedInput) : 1
   const hotNumberSource = isTracking ? trackedWinningNumbers : winningNumbers
   const hotNumbers = useMemo(() => getHotNumbers(hotNumberSource), [hotNumberSource])
   const selectedStartingQuadrantNumbers = useMemo(
@@ -325,7 +325,7 @@ export function RouletteVirtualBoard({
       if (autoStartingQuadrant) setStartingQuadrant(autoStartingQuadrant)
       setTrackedWinningNumbers([])
       setLastConsumedIndex(winningNumbers.length)
-      setLockedBankValue(baseUnit * 288)
+      setLockedBankValue(baseUnit * 272)
       setIsTracking(true)
     }
   }, [auto, signalFound, isTracking, autoStartingQuadrant, baseUnit, winningNumbers.length])
@@ -429,7 +429,7 @@ export function RouletteVirtualBoard({
 
     setTrackedWinningNumbers([])
     setLastConsumedIndex(winningNumbers.length)
-    setLockedBankValue(baseUnit * 288)
+    setLockedBankValue(baseUnit * 272)
     setIsTracking(true)
   }
   const placeEvolutionBets = (numbers: number[]) => {
@@ -825,7 +825,7 @@ export function RouletteVirtualBoard({
                   className={cn('text-[0.62rem] uppercase tracking-[0.2em] text-slate-400', {
                     'font-medium text-indigo-300 opacity-100': inputMode === 'base'
                   })}>
-                  {inputMode === 'base' ? `${baseUnit * 288}` : `unit = ${baseUnit.toFixed(2)}`}
+                  {inputMode === 'base' ? `${baseUnit * 272}` : `unit = ${baseUnit.toFixed(2)}`}
                 </span>
                 <button
                   type='button'
@@ -866,7 +866,7 @@ export function RouletteVirtualBoard({
             <Stat>
               <p className='text-[0.62rem] uppercase tracking-[0.2em] text-slate-400'>PCT</p>
               <p className='mt-1.5 text-lg font-normal text-indigo-300'>
-                {(((winAmount - totalStaked) / (baseUnit * 288)) * 100).toFixed(2)}
+                {(((winAmount - totalStaked) / (baseUnit * 272)) * 100).toFixed(2)}
                 <span className='text-[7px]'>%</span>
               </p>
             </Stat>

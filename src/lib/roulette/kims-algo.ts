@@ -557,7 +557,10 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
       scatter: resolvedOptions.scatter,
       scatterSeed: index
     })
-    const hitQuadrant = bet.numbers.includes(landedNumber)
+    // A win requires the ball to land on a number from the active quadrant definitions,
+    // not merely any number placed on the table (spread replacements are coverage bets,
+    // not intended targets — landing on one should not trigger a session reset).
+    const hitQuadrant = bet.quadrants.some((q) => (KIMS_ALGO_QUADRANTS[q] as readonly number[]).includes(landedNumber))
     const hitZero = bet.zeroStake > 0 && landedNumber === 0
     const hit = hitQuadrant || hitZero
     const selection = selectKimQuadrant(landedNumber, {
