@@ -3,7 +3,8 @@
 import { Icon } from '@/src/lib/icons'
 import { cn } from '@/src/lib/utils'
 import { TableState } from '@/src/types/roulette'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 interface Chip extends ChipProps {
   id: string
@@ -93,25 +94,58 @@ export const ChipStack = ({
     BETS_CLOSED_ANNOUNCED: 'CLOSED',
     BETS_CLOSED: 'CLOSED'
   }
+
+  const upwardLabels = new Set(['OPEN', 'RESOLVED'])
+  const label = tableState ? smap[tableState] : null
+  const [displayedLabel, setDisplayedLabel] = useState<string | null>(label)
+
+  useEffect(() => {
+    if (label === displayedLabel) return
+    const dir = label && upwardLabels.has(label) ? 'up' : 'down'
+    document.documentElement.dataset.stateDir = dir
+    if (!document.startViewTransition) {
+      setDisplayedLabel(label)
+      return
+    }
+    document.startViewTransition(() => {
+      flushSync(() => setDisplayedLabel(label))
+    })
+  }, [label])
+
   return (
     <div className='' data-role='footer-perspective-chip-stack' data-is-collapsed='true'>
       <div className='' data-role='chip-stack-wrapper'>
         <div
           className='bg-orange-100/0 py-4 flex items-center justify-center space-x-4'
           data-role='expanded-chip-stack-wrapper'>
-          <p
-            id='table-state'
-            className={cn(
-              'font-display font-semibold text-sm text-center uppercase w-18 py-0.5',
-              {
-                'text-emerald-400': tableState && smap[tableState] === 'OPEN',
-                'text-orange-300 animate-pulse': tableState && smap[tableState] === 'CLOSING',
-                'text-red-400': tableState && smap[tableState] === 'CLOSED'
-              },
-              !tableState && 'opacity-0'
-            )}>
-            {tableState ? smap[tableState] : '—'}
-          </p>
+          <style>{`
+            @keyframes state-slide-up-in    { from { opacity:0; transform:translateY(-20px);  } to { opacity:1; transform:translateY(0); } }
+            @keyframes state-slide-down-out { from { opacity:1; transform:translateY(0);      } to { opacity:0; transform:translateY(10px); } }
+            @keyframes state-slide-down-in  { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+            @keyframes state-slide-up-out   { from { opacity:1; transform:translateY(0);      } to { opacity:0; transform:translateY(-10px);  } }
+
+            ::view-transition-old(table-state) { animation: state-slide-down-out 0.3s ease-in  both; }
+            ::view-transition-new(table-state) { animation: state-slide-up-in    0.3s ease-out both; }
+            :root[data-state-dir="down"] ::view-transition-old(table-state) { animation: state-slide-up-out  0.3s ease-in  both; }
+            :root[data-state-dir="down"] ::view-transition-new(table-state) { animation: state-slide-down-in 0.3s ease-out both; }
+          `}</style>
+          <div className='flex items-center justify-center w-20 h-12 overflow-hidden'>
+            <p
+              id='table-state'
+              style={{ viewTransitionName: 'table-state' }}
+              className={cn(
+                'font-display font-semibold text-sm text-center uppercase py-0.5',
+                {
+                  'text-emerald-400': displayedLabel === 'OPEN',
+                  'text-orange-300 animate-pulse': displayedLabel === 'CLOSING',
+                  'text-red-400': displayedLabel === 'CLOSED',
+                  'text-slate-300': displayedLabel === 'RESOLVED'
+                },
+                !displayedLabel && 'opacity-0'
+              )}>
+              {displayedLabel ?? '—'}
+            </p>
+          </div>
           <button className='flex space-x-2' onClick={onUndo} title='Undo last bet'>
             <Icon name='undo' className='size-4 opacity-50' />
           </button>
@@ -132,7 +166,7 @@ export const ChipStack = ({
           )}
 
           <button className='flex items-center space-x-2' onClick={onDouble} title='Double bets'>
-            <span className='text-base opacity-50'>2x</span>
+            <span className='font-semibold text-sm opacity-50'>2x</span>
           </button>
 
           {/*<button

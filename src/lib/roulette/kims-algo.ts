@@ -11,6 +11,9 @@ export interface KimAlgoOptions {
   spreadSelectionMode?: KimSpreadSelectionMode
   hotNumbers?: readonly number[]
   scatter?: boolean
+  /** Actual numbers physically placed on the table for each spin, indexed by spin position.
+   *  When present for a given step, takes precedence over bet.quadrantNumbers for hit detection. */
+  placedNumbersPerStep?: ReadonlyArray<readonly number[]>
 }
 
 export interface KimAlgoBetPlan {
@@ -18,6 +21,7 @@ export interface KimAlgoBetPlan {
   quadrant: KimQuadrantId
   quadrants: KimQuadrantId[]
   numbers: number[]
+  quadrantNumbers: number[]
   unitStake: number
   zeroStake: number
   totalStake: number
@@ -86,11 +90,11 @@ export const KIMS_ALGO_ASSUMPTIONS = [
   'The YAML is treated as authoritative for all quadrant definitions, including q5 = [13, 14, 17, 16].',
   'The round ladder counts straight-up number placements, not unique board coverage: round 1 places 4 numbers, round 2 places 8, round 3 places 12, round 4 places 16 plus zero, and round 5 places 20 plus zero.',
   'Per-number stake progression is interpreted as [1x, 1x, 2x, 4x, 8x].',
-  'Overlap mode defaults to off. When a new quadrant would overlap existing placements, the overlapping slots are replaced by hot-prioritized local spread picks.',
+  'Overlap mode defaults to off. When a new quadrant would overlap existing placements, the overlapping slots are replaced by hot-prioritized local spread picks. Win detection uses quadrantNumbers — the subset of placed numbers that also belong to an active quadrant definition — so spread fills never trigger a win and displaced quadrant numbers (not physically placed) are also excluded.',
   'Idle auto-start uses the latest two logged numbers when they share a quadrant; shared top-vs-bottom ties are broken by hot-number density, then hot rank, then current quadrant.',
   'Zero is hedged on rounds 4 and 5 with the same per-number stake used on the quadrant.',
   'After each miss, the next quadrant is chosen from the landed number and added to the active sequence before the next round begins.',
-  'If a winning number belongs to multiple quadrants, the selector prefers a quadrant that has not already appeared in the active sequence; ties break by proximity to the current quadrant id, then by lower quadrant id.',
+  'If a winning number belongs to multiple quadrants, the selector prefers the hotter quadrant first — provided the hotter quadrant is not already in the active sequence; if the hotter quadrant is already active, an unused quadrant wins instead; remaining ties break by hot rank score, proximity to the current quadrant id, then by lower quadrant id.',
   'If a reset spin lands on 0, the next quadrant stays on the current quadrant because 0 does not belong to any quadrant.'
 ] as const
 
@@ -299,7 +303,7 @@ function resolveQuadrantPlacements(
 
     const rowNumbers =
       targetRow === 1
-        ? Array.from({ length: 12 }, (_, i) => i * 3 + 1)   // 1, 4, 7, … 34
+        ? Array.from({ length: 12 }, (_, i) => i * 3 + 1) // 1, 4, 7, … 34
         : Array.from({ length: 12 }, (_, i) => (i + 1) * 3) // 3, 6, 9, … 36
 
     spreadNumbers = rowNumbers
@@ -379,23 +383,33 @@ export function selectKimQuadrant(
   const currentIndex = currentQuadrant ? getQuadrantIndex(currentQuadrant) : null
 
   const selectedQuadrant = [...candidateQuadrants].sort((left, right) => {
-    // 1. Prefer quadrant not already in the active sequence
     const leftIsUsed = usedQuadrantSet.has(left)
     const rightIsUsed = usedQuadrantSet.has(right)
-    if (leftIsUsed !== rightIsUsed) {
-      return leftIsUsed ? 1 : -1
-    }
-
-    // 2. Prefer quadrant with more hot numbers
     const leftNumbers = KIMS_ALGO_QUADRANTS[left]
     const rightNumbers = KIMS_ALGO_QUADRANTS[right]
     const leftHotCount = leftNumbers.filter((value) => hotNumberRanks.has(value)).length
     const rightHotCount = rightNumbers.filter((value) => hotNumberRanks.has(value)).length
+
+    // 1. Prefer the hotter quadrant, but only if the hotter one is not already in the active sequence
+    if (leftHotCount !== rightHotCount) {
+      const hotterIsLeft = leftHotCount > rightHotCount
+      const hotterIsUsed = hotterIsLeft ? leftIsUsed : rightIsUsed
+      if (!hotterIsUsed) {
+        return rightHotCount - leftHotCount
+      }
+    }
+
+    // 2. Prefer quadrant not already in the active sequence
+    if (leftIsUsed !== rightIsUsed) {
+      return leftIsUsed ? 1 : -1
+    }
+
+    // 3. Prefer quadrant with more hot numbers (both have same used status)
     if (leftHotCount !== rightHotCount) {
       return rightHotCount - leftHotCount
     }
 
-    // 3. Prefer quadrant with higher cumulative hot rank score (lower rank index = hotter)
+    // 4. Prefer quadrant with higher cumulative hot rank score (lower rank index = hotter)
     const leftHotScore = leftNumbers.reduce((score, value) => {
       const rank = hotNumberRanks.get(value)
       return score + (rank === undefined ? 0 : hotNumbers.length - rank)
@@ -408,7 +422,7 @@ export function selectKimQuadrant(
       return rightHotScore - leftHotScore
     }
 
-    // 4. Prefer quadrant closest to the current quadrant by index
+    // 5. Prefer quadrant closest to the current quadrant by index
     if (currentIndex !== null) {
       const distanceToLeft = Math.abs(getQuadrantIndex(left) - currentIndex)
       const distanceToRight = Math.abs(getQuadrantIndex(right) - currentIndex)
@@ -417,7 +431,7 @@ export function selectKimQuadrant(
       }
     }
 
-    // 5. Lower quadrant id as final tiebreaker
+    // 6. Lower quadrant id as final tiebreaker
     return getQuadrantIndex(left) - getQuadrantIndex(right)
   })[0]
 
@@ -513,12 +527,17 @@ export function createKimAlgoBetPlan(
   }
 
   const coverageCount = numbers.length + (zeroStake > 0 ? 1 : 0)
+  const placedSet = new Set(numbers)
+  const quadrantNumbers = [...quadrants]
+    .flatMap((q) => (KIMS_ALGO_QUADRANTS[q] as readonly number[]).filter((n) => placedSet.has(n)))
+    .filter((n, i, arr) => arr.indexOf(n) === i)
 
   return {
     round,
     quadrant: quadrants[quadrants.length - 1],
     quadrants: [...quadrants],
     numbers,
+    quadrantNumbers,
     unitStake,
     zeroStake,
     totalStake: numbers.length * unitStake + zeroStake,
@@ -557,15 +576,37 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
       scatter: resolvedOptions.scatter,
       scatterSeed: index
     })
-    // A win requires the ball to land on a number from the active quadrant definitions,
-    // not merely any number placed on the table (spread replacements are coverage bets,
-    // not intended targets — landing on one should not trigger a session reset).
-    const hitQuadrant = bet.quadrants.some((q) => (KIMS_ALGO_QUADRANTS[q] as readonly number[]).includes(landedNumber))
+    // A win requires the ball to land on a number that was physically placed AND belongs
+    // to an active quadrant definition. Spread replacements are not in quadrantNumbers so
+    // they cannot trigger a session reset, and quadrant numbers displaced by spread fills
+    // (never actually placed) are also excluded.
+    // Use actually-placed numbers from Evolution when available; fall back to the
+    // computed quadrantNumbers so the simulator still works without live data.
+    const actualPlaced = resolvedOptions.placedNumbersPerStep?.[index]
+    const hitQuadrant = actualPlaced
+      ? actualPlaced.includes(landedNumber)
+      : bet.quadrantNumbers.includes(landedNumber)
+
+    console.log(
+      `[kim] spin ${index + 1} | R${activeRound} | quadrants: [${activeQuadrants.join(', ')}]` +
+        ` | placed: [${(actualPlaced ?? bet.numbers).join(', ')}]` +
+        ` | landed: ${landedNumber} | hit: ${hitQuadrant}` +
+        (actualPlaced ? ' (live)' : ' (sim)')
+    )
+
     const hitZero = bet.zeroStake > 0 && landedNumber === 0
     const hit = hitQuadrant || hitZero
+    // Zero on rounds 1–3 (no zero hedge) is an immediate loss — don't escalate
+    const zeroOnUnhedgedRound = landedNumber === 0 && bet.zeroStake === 0
+    const isSessionReset = hit || activeRound === KIMS_ALGO_MAX_ROUNDS || zeroOnUnhedgedRound
+
+    // After a session reset the next quadrant belongs to a fresh sequence — pass no
+    // usedQuadrants so the selector picks purely by hot count and proximity to the
+    // current quadrant. During a miss-chain, pass activeQuadrants to avoid repeating
+    // a quadrant that is already in the escalating sequence.
     const selection = selectKimQuadrant(landedNumber, {
       currentQuadrant: activeQuadrant,
-      usedQuadrants: activeQuadrants,
+      usedQuadrants: isSessionReset ? [] : activeQuadrants,
       hotNumbers: resolvedOptions.hotNumbers
     })
 
@@ -573,9 +614,6 @@ export function simulateKimsAlgo(spins: readonly number[], options: Partial<KimA
     let nextRound: KimAlgoStep['nextRound'] = activeRound === 5 ? 5 : ((activeRound + 1) as KimAlgoStep['nextRound'])
     let nextQuadrant = activeQuadrant
     let nextQuadrants = [...activeQuadrants]
-
-    // Zero on rounds 1–3 (no zero hedge) is an immediate loss — don't escalate
-    const zeroOnUnhedgedRound = landedNumber === 0 && bet.zeroStake === 0
 
     if (hit) {
       sessionOutcome = 'reset_after_win'

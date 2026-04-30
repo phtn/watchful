@@ -137,8 +137,9 @@ async function trustedClickBySelector(tabId: number, selector: string): Promise<
     }
 
     await dispatchTrustedClickAt(tabId, coords.x, coords.y)
+    const button = selector.split('"')[1]
 
-    console.log('[evo] click', selector, `(${coords.x}, ${coords.y}) frame=${coords.frame}`)
+    console.log('[EVO] ', button === 'double-button' ? 'DB' : button, `(${coords.x}, ${coords.y})`)
     return { ok: true, x: coords.x, y: coords.y }
   } catch (error) {
     return { ok: false, error: String(error) }
@@ -325,7 +326,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const placed: number[] = []
         let missed: number[] = []
 
-        console.log(`[evo] bet loop — ${numbers.length} spots, chip ${chipValue}`)
+        console.log(`[EVO] Bet Loop — ${numbers.length} spots, chip ${chipValue}`)
 
         for (const num of numbers) {
           const result = await trustedClickBySelector(activeTab.id, `[data-bet-spot-id="${num}"]`)
@@ -333,25 +334,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             placed.push(num)
           } else {
             missed.push(num)
-            console.warn(`[watchful-wind] Bet spot ${num} missed — ${result.error ?? 'unknown error'}`)
+            console.warn(`[WW] Bet spot ${num} missed — ${result.error ?? 'unknown error'}`)
           }
           await new Promise((r) => setTimeout(r, 140))
         }
+
+        console.log(`[EVO] Placed: ${placed}`)
 
         // ── Retry pass — reattempt any missed spots up to 3 times ─────────────
         for (let attempt = 1; attempt <= 3 && missed.length > 0; attempt++) {
           const toRetry = [...missed]
           missed = []
           await new Promise((r) => setTimeout(r, 300))
-          console.log(`[evo] retry pass ${attempt} — ${toRetry.length} spots`)
+          console.log(`[EVO] retry pass ${attempt} — ${toRetry.length} spots`)
           for (const num of toRetry) {
             const result = await trustedClickBySelector(activeTab.id, `[data-bet-spot-id="${num}"]`)
             if (result.ok) {
               placed.push(num)
-              console.log(`[evo] retry ✓ spot ${num}`)
+              console.log(`[EVO] retry ✓ spot ${num}`)
             } else {
               missed.push(num)
-              console.warn(`[evo] retry ${attempt} failed spot ${num} — ${result.error ?? 'unknown error'}`)
+              console.warn(`[EVO] retry ${attempt} failed spot ${num} — ${result.error ?? 'unknown error'}`)
             }
             await new Promise((r) => setTimeout(r, 150))
           }
@@ -366,7 +369,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const dr = await trustedClickBySelector(activeTab.id, '[data-role="double-button"]')
           doublesApplied.push(i + 1)
           if (!dr.ok) {
-            console.warn(`[watchful-wind] Double click ${i + 1}/${doubleCount} failed: ${dr.error}`)
+            console.warn(`[WW] Double click ${i + 1}/${doubleCount} failed: ${dr.error}`)
           }
           // Give Evolution's animation time to register before the next double.
           await new Promise((r) => setTimeout(r, 220))
